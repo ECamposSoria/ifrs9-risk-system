@@ -1,0 +1,259 @@
+# IFRS9 Pipeline Orchestration Configuration
+# Central configuration for pipeline monitoring, SLAs, and operational parameters
+
+# Service Level Agreements (SLAs) Configuration
+sla_configuration:
+  # Pipeline Stage SLAs (in minutes)
+  pipeline_slas:
+    data_generation: 15      # Synthetic data generation
+    data_validation: 10      # Data quality validation
+    ifrs9_processing: 45     # Core IFRS9 rules processing
+    ml_training: 30          # ML model training and prediction
+    report_generation: 10    # Report and dashboard generation
+    data_upload: 20          # GCS upload
+    bigquery_load: 15        # BigQuery data loading
+    total_pipeline: 150      # Total end-to-end pipeline SLA
+  
+  # Business Critical SLAs
+  business_slas:
+    regulatory_reporting_deadline_hours: 48  # Must complete within 48 hours of month-end
+    data_freshness_max_hours: 6            # Data cannot be older than 6 hours
+    model_prediction_max_seconds: 30       # ML predictions must complete within 30 seconds
+    compliance_validation_max_minutes: 5   # Compliance checks must complete within 5 minutes
+
+# Error Handling and Retry Configuration
+error_handling:
+  # Global Retry Configuration
+  default_retries: 3
+  default_retry_delay_minutes: 5
+  exponential_backoff_multiplier: 2
+  max_retry_delay_minutes: 30
+  
+  # Task-Specific Retry Configuration
+  task_retry_overrides:
+    data_generation: 
+      retries: 2
+      retry_delay_minutes: 3
+    data_validation:
+      retries: 5  # Critical for data quality
+      retry_delay_minutes: 2
+    ifrs9_processing:
+      retries: 3
+      retry_delay_minutes: 10
+    ml_training:
+      retries: 2
+      retry_delay_minutes: 15
+    report_generation:
+      retries: 3
+      retry_delay_minutes: 5
+  
+  # Failure Escalation Rules
+  escalation_rules:
+    consecutive_failures_threshold: 2    # Escalate after 2 consecutive failures
+    failure_rate_threshold_percent: 20   # Escalate if >20% of runs fail in 24h
+    critical_task_immediate_escalation: ["data_validation", "ifrs9_processing"]
+    
+# Inter-Agent Communication Configuration
+agent_communication:
+  # XCom Data Sharing Keys
+  xcom_keys:
+    pipeline_status: "pipeline_status"
+    data_quality_metrics: "data_quality_metrics" 
+    ifrs9_summary: "ifrs9_summary"
+    model_performance: "model_performance"
+    error_logs: "error_logs"
+    processing_metrics: "processing_metrics"
+    
+  # Agent Coordination Protocol
+  coordination_protocol:
+    status_broadcast_interval_seconds: 30
+    health_check_interval_seconds: 60
+    agent_timeout_seconds: 300
+    max_concurrent_agents: 6
+    
+  # Agent Dependencies and Execution Order
+  execution_sequence:
+    - agent: "ifrs9-data-generator"
+      prerequisites: []
+      outputs: ["synthetic_data_ready"]
+    - agent: "ifrs9-validator" 
+      prerequisites: ["synthetic_data_ready"]
+      outputs: ["data_validated", "quality_metrics"]
+    - agent: "ifrs9-rules-engine"
+      prerequisites: ["data_validated"]
+      outputs: ["ifrs9_calculations", "staging_results"]
+    - agent: "ifrs9-ml-models"
+      prerequisites: ["ifrs9_calculations"]
+      outputs: ["ml_predictions", "model_metrics"]
+    - agent: "ifrs9-integrator"
+      prerequisites: ["ml_predictions"]
+      outputs: ["data_uploaded", "integration_complete"]
+    - agent: "ifrs9-reporter"
+      prerequisites: ["integration_complete"]
+      outputs: ["reports_generated", "dashboards_updated"]
+
+# Monitoring and Alerting Configuration  
+monitoring:
+  # Performance Metrics Collection
+  metrics_collection:
+    enabled: true
+    collection_interval_seconds: 30
+    retention_days: 90
+    
+  # Key Performance Indicators
+  kpis:
+    pipeline_success_rate_target: 99.5
+    average_processing_time_minutes_target: 120
+    data_quality_score_minimum: 95.0
+    model_accuracy_minimum: 85.0
+    resource_utilization_maximum_percent: 80
+    
+  # Alerting Configuration
+  alerting:
+    enabled: true
+    alert_channels: ["email", "slack", "pagerduty"]
+    
+    # Alert Severity Levels
+    alert_levels:
+      critical:
+        conditions:
+          - "pipeline_failure"
+          - "sla_breach_critical_task"
+          - "data_quality_below_threshold"
+          - "regulatory_deadline_risk"
+        notification_delay_seconds: 0
+        escalation_minutes: 15
+        
+      warning:
+        conditions:
+          - "task_retry_exceeded"
+          - "performance_degradation"
+          - "model_accuracy_decline"
+          - "resource_utilization_high"
+        notification_delay_seconds: 300
+        escalation_minutes: 60
+        
+      info:
+        conditions:
+          - "pipeline_success"
+          - "model_retraining_complete"
+          - "scheduled_maintenance"
+        notification_delay_seconds: 0
+        escalation_minutes: 0
+
+# Resource Management Configuration
+resource_management:
+  # Auto-scaling Configuration
+  auto_scaling:
+    enabled: true
+    cpu_threshold_percent: 75
+    memory_threshold_percent: 80
+    scale_up_cooldown_minutes: 10
+    scale_down_cooldown_minutes: 30
+    
+  # Resource Limits
+  resource_limits:
+    max_concurrent_pipelines: 3
+    max_memory_gb_per_task: 8
+    max_cpu_cores_per_task: 4
+    max_execution_time_hours: 4
+    
+  # Data Retention Policies
+  data_retention:
+    raw_data_days: 30
+    processed_data_days: 90
+    model_artifacts_days: 365
+    audit_logs_days: 2555  # 7 years for regulatory compliance
+    monitoring_data_days: 90
+
+# Business Rules and Validation
+business_rules:
+  # Data Quality Gates
+  data_quality_gates:
+    minimum_completeness_percent: 95
+    maximum_duplicate_percent: 1
+    maximum_outlier_percent: 5
+    required_fields: ["loan_id", "customer_id", "loan_amount", "risk_rating"]
+    
+  # IFRS9 Compliance Validation
+  ifrs9_validation:
+    maximum_stage_migration_percent: 15  # Alert if >15% of loans change stage
+    ecl_coverage_ratio_minimum: 0.01    # Minimum 1% coverage ratio
+    ecl_coverage_ratio_maximum: 0.25    # Maximum 25% coverage ratio
+    stage3_impaired_ratio_maximum: 0.10  # Maximum 10% Stage 3 loans
+    
+  # Model Performance Thresholds
+  model_performance:
+    stage_classification_accuracy_minimum: 0.85
+    pd_prediction_mae_maximum: 0.05
+    model_stability_coefficient_minimum: 0.90  # Model stability between runs
+    feature_importance_drift_threshold: 0.15   # Alert if feature importance changes >15%
+
+# Integration Configuration
+integration_settings:
+  # External Systems
+  external_systems:
+    bigquery:
+      dataset_id: "ifrs9_risk_data"
+      table_prefix: "ifrs9_"
+      partition_field: "processing_date"
+      clustering_fields: ["loan_type", "risk_rating"]
+      
+    cloud_storage:
+      bucket_name: "ifrs9-risk-system"
+      data_path: "processed_data"
+      model_path: "ml_models"
+      archive_path: "archive"
+      
+    monitoring_systems:
+      prometheus_endpoint: "http://prometheus:9090"
+      grafana_endpoint: "http://grafana:3000"
+      alertmanager_endpoint: "http://alertmanager:9093"
+      
+  # Data Exchange Formats
+  data_formats:
+    internal_format: "parquet"
+    export_format: "json"
+    compression: "snappy"
+    schema_validation: true
+
+# Operational Configuration
+operational_settings:
+  # Maintenance Windows
+  maintenance_windows:
+    weekly_maintenance:
+      day: "Sunday"
+      start_time: "02:00"
+      duration_hours: 4
+      affected_operations: ["model_retraining", "system_updates"]
+      
+    monthly_maintenance:
+      day: "first_saturday"
+      start_time: "01:00" 
+      duration_hours: 6
+      affected_operations: ["full_system_backup", "performance_optimization"]
+  
+  # Backup and Recovery
+  backup_recovery:
+    backup_frequency_hours: 6
+    backup_retention_days: 30
+    recovery_time_objective_minutes: 60
+    recovery_point_objective_minutes: 30
+    
+  # Security Configuration
+  security:
+    encryption_at_rest: true
+    encryption_in_transit: true
+    access_logging: true
+    audit_trail: true
+    pii_masking: true
+    data_lineage_tracking: true
+
+# Version and Environment Configuration
+environment:
+  version: "1.0.0"
+  environment_type: "production"
+  deployment_timestamp: null  # Will be set during deployment
+  configuration_hash: null    # Will be computed during deployment
+  last_updated_by: "ifrs9-orchestrator"
+  last_updated_timestamp: null # Will be set during updates

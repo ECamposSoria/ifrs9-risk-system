@@ -1,0 +1,219 @@
+FROM python:3.10-slim
+
+# Install Java and other dependencies for PySpark
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    openjdk-21-jre-headless \
+    curl \
+    gcc \
+    g++ \
+    make \
+    libpq-dev \
+    procps \
+    netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Java environment
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+# Set Spark environment
+ENV SPARK_VERSION=3.5.4
+ENV HADOOP_VERSION=3
+ENV SPARK_HOME=/opt/spark
+ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
+ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.5-src.zip:${PYTHONPATH}"
+
+# Download and install Spark
+RUN curl -L https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz | \
+    tar -xz -C /opt && \
+    mv /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME}
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies in stages to handle conflicts better
+RUN pip install --no-cache-dir --disable-pip-version-check --upgrade pip setuptools wheel
+
+# Install core dependencies first - enhanced datetime support with Polars
+RUN pip install --no-cache-dir \
+    "pandas>=2.0.0,<2.1.0" \
+    "numpy>=1.24.0,<1.25.0" \
+    "pyarrow>=6.0.0,<7.0.0" \
+    "python-dateutil>=2.8.2,<3.0.0"
+
+# Install Polars with feature flags for maximum compatibility
+RUN pip install --no-cache-dir \
+    "polars[pandas,numpy,pyarrow]>=0.20.0,<1.0.0"
+
+# Install PySpark with datetime64[ns] compatibility
+RUN pip install --no-cache-dir \
+    "pyspark>=3.5.0,<3.6.0" \
+    "pyspark[sql]>=3.5.0,<3.6.0"
+
+# Install additional datetime conversion utilities
+RUN pip install --no-cache-dir \
+    "pytz>=2023.3" \
+    "tzdata>=2023.3"
+
+# Verify zoneinfo is available (built-in in Python 3.9+)
+RUN python3 -c "import zoneinfo; print('✅ zoneinfo module available')"
+
+# Fix multimethod version conflict first - uninstall any existing version
+RUN pip uninstall -y multimethod || true
+
+# Install compatible multimethod and pandera versions to avoid import errors
+RUN pip install --no-cache-dir \
+    multimethod==1.9.1 \
+    pandera==0.17.2
+
+# Install remaining dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional test dependencies to ensure proper testing environment
+RUN pip install --no-cache-dir \
+    pytest==7.4.0 \
+    pytest-cov==4.1.0 \
+    pytest-xdist==3.3.1
+
+# Copy application code
+COPY src/ /app/src/
+COPY dags/ /app/dags/
+COPY tests/ /app/tests/
+
+# Create necessary directories
+RUN mkdir -p /app/data/raw /app/data/processed /app/logs /opt/spark/conf
+
+# Create Spark configuration for datetime handling optimization and Java 21 compatibility
+RUN cat > /opt/spark/conf/spark-defaults.conf << 'EOF'
+# Enhanced datetime conversion settings for IFRS9
+spark.sql.execution.arrow.pyspark.enabled true
+spark.sql.execution.arrow.pyspark.fallback.enabled true
+spark.sql.execution.arrow.maxRecordsPerBatch 10000
+spark.sql.adaptive.enabled true
+spark.sql.adaptive.coalescePartitions.enabled true
+spark.serializer org.apache.spark.serializer.KryoSerializer
+spark.sql.repl.eagerEval.enabled true
+spark.sql.repl.eagerEval.maxNumRows 20
+spark.sql.datetime.java8API.enabled true
+spark.sql.legacy.timeParserPolicy LEGACY
+
+# Java 21 compatibility flags
+spark.driver.extraJavaOptions -Djdk.reflect.useDirectMethodHandle=false --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED
+spark.executor.extraJavaOptions -Djdk.reflect.useDirectMethodHandle=false --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED
+EOF
+
+# Set Python path
+ENV PYTHONPATH=/app:${PYTHONPATH}
+
+# Default Spark configuration
+ENV SPARK_MASTER_HOST=spark-master
+ENV SPARK_MASTER_PORT=7077
+ENV SPARK_MASTER_WEBUI_PORT=8080
+
+# Enhanced PyArrow and datetime configuration for IFRS9
+ENV PYARROW_IGNORE_TIMEZONE=1
+ENV ARROW_PRE_0_15_IPC_FORMAT=1
+ENV SPARK_CONF_DIR=/opt/spark/conf
+ENV PYSPARK_PYTHON=python3
+
+# Polars optimization for containerized environments
+ENV POLARS_MAX_THREADS=4
+ENV POLARS_TABLE_WIDTH=120
+ENV POLARS_FMT_MAX_COLS=20
+ENV POLARS_FMT_MAX_ROWS=25
+ENV POLARS_STREAMING_CHUNK_SIZE=50000
+
+# Timezone configuration for consistent datetime handling
+ENV TZ=UTC
+ENV LC_TIME=C.UTF-8
+
+# Spark datetime conversion optimization
+ENV SPARK_SQL_EXECUTION_ARROW_MAXRECORDSPERBTACH=10000
+ENV SPARK_SQL_EXECUTION_ARROW_PYSPARK_ENABLED=true
+ENV SPARK_SQL_EXECUTION_ARROW_PYSPARK_FALLBACK_ENABLED=true
+
+# Expose ports
+EXPOSE 7077 8080 8081 4040
+
+# Health check with Polars validation
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import pyspark, polars as pl; print('PySpark OK'); print(f'Polars OK: {pl.__version__}')" || exit 1
+
+# Entry point script with enhanced datetime configuration
+COPY <<'EOF' /entrypoint.sh
+#!/bin/bash
+set -e
+
+# IFRS9 Enhanced Datetime Environment Setup
+export PYARROW_IGNORE_TIMEZONE=1
+export ARROW_PRE_0_15_IPC_FORMAT=1
+export TZ=UTC
+export LC_TIME=C.UTF-8
+
+# Enhanced PySpark configuration for datetime handling
+export PYSPARK_SUBMIT_ARGS="--conf spark.sql.execution.arrow.pyspark.enabled=true \
+--conf spark.sql.execution.arrow.pyspark.fallback.enabled=true \
+--conf spark.sql.execution.arrow.maxRecordsPerBatch=10000 \
+--conf spark.sql.datetime.java8API.enabled=true \
+--conf spark.sql.legacy.timeParserPolicy=LEGACY \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+pyspark-shell"
+
+# Validate datetime conversion environment with Polars integration
+python3 -c "
+import pandas as pd
+import numpy as np
+import polars as pl
+from datetime import datetime
+print('✅ IFRS9 Datetime & Polars Environment Validation:')
+print(f'Pandas version: {pd.__version__}')
+print(f'NumPy version: {np.__version__}')
+print(f'Polars version: {pl.__version__}')
+print(f'Timezone: {datetime.now().astimezone().tzinfo}')
+# Test datetime64[ns] creation
+test_dt = pd.to_datetime(['2024-01-01']).astype('datetime64[ns]')
+print(f'datetime64[ns] test: {test_dt.dtype}')
+# Test Polars DataFrame creation and pandas interop
+test_df = pl.DataFrame({'date': [datetime(2024, 1, 1)], 'value': [100]})
+test_pandas = test_df.to_pandas()
+print(f'Polars->Pandas conversion test: {type(test_pandas)} with {len(test_pandas)} rows')
+print('✅ Datetime & Polars environment ready for IFRS9')
+" || echo "⚠️ Environment validation failed, continuing with startup..."
+
+# Start Spark based on SPARK_MODE environment variable
+if [ "$SPARK_MODE" = "master" ]; then
+    echo "Starting Spark Master with IFRS9 datetime optimization..."
+    # Run Spark master in foreground
+    exec ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.master.Master \
+        --host 0.0.0.0 \
+        --port 7077 \
+        --webui-port 8080
+elif [ "$SPARK_MODE" = "worker" ]; then
+    echo "Starting Spark Worker with IFRS9 datetime optimization..."
+    # Wait for master to be available
+    echo "Waiting for Spark Master at ${SPARK_MASTER_URL}..."
+    while ! nc -z spark-master 7077 2>/dev/null; do
+        echo "Waiting for Spark Master to be ready..."
+        sleep 2
+    done
+    echo "Spark Master is ready!"
+    # Run Spark worker in foreground
+    exec ${SPARK_HOME}/bin/spark-class org.apache.spark.deploy.worker.Worker \
+        ${SPARK_MASTER_URL} \
+        --cores ${SPARK_WORKER_CORES:-2} \
+        --memory ${SPARK_WORKER_MEMORY:-2G} \
+        --webui-port 8081
+else
+    echo "SPARK_MODE not set, running as standalone with IFRS9 datetime config"
+    exec "$@"
+fi
+EOF
+
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python"]

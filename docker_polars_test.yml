@@ -1,0 +1,205 @@
+version: "3.9"
+
+# Test-optimized compose for Polars validation & performance
+services:
+  pytest-runner:
+    image: python:3.12-slim
+    container_name: pytest-runner
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - POLARS_MAX_THREADS=${POLARS_MAX_THREADS:-4}
+      - IN_DOCKER=1
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - spark-master
+      - spark-worker
+      - jupyter
+      - airflow-webserver
+      - airflow-scheduler
+    entrypoint: ["bash", "-lc"]
+    command: |
+      "pip install -r requirements.txt >/dev/null 2>&1 || true; \
+       pip install pytest pytest-xdist >/dev/null 2>&1 || true; \
+       pytest -q --maxfail=1 -m docker -k polars || true"
+  spark-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.ifrs9-spark
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - POLARS_MAX_THREADS=${POLARS_MAX_THREADS:-4}
+      - PYARROW_IGNORE_TIMEZONE=1
+      - TZ=UTC
+    ports:
+      - "${SPARK_MASTER_PORT:-0}:7077"
+      - "${SPARK_MASTER_UI_PORT:-0}:8080"
+    volumes:
+      - ./data:/data
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./validation:/app/validation
+    healthcheck:
+      test: ["CMD-SHELL", "python /app/validation/polars_health_check.py --threshold-ms 3000 --data-path /data --quiet"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "3g"
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.ifrs9-spark
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - POLARS_MAX_THREADS=${POLARS_MAX_THREADS:-4}
+      - PYARROW_IGNORE_TIMEZONE=1
+      - TZ=UTC
+    ports:
+      - "${SPARK_WORKER_UI_PORT:-0}:8081"
+    volumes:
+      - ./data:/data
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./validation:/app/validation
+    healthcheck:
+      test: ["CMD-SHELL", "python /app/validation/polars_health_check.py --threshold-ms 3500 --data-path /data --quiet"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "3g"
+
+  jupyter:
+    build:
+      context: .
+      dockerfile: docker/jupyter/Dockerfile.ifrs9-jupyter
+    container_name: jupyter
+    depends_on:
+      - spark-master
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-ifrs9}
+      - POLARS_MAX_THREADS=${POLARS_MAX_THREADS:-4}
+    ports:
+      - "${JUPYTER_PORT:-0}:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/notebooks
+      - ./data:/home/jovyan/data
+      - ./src:/home/jovyan/src
+      - ./tests:/home/jovyan/tests
+      - ./validation:/home/jovyan/validation
+    command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-ifrs9}'
+    healthcheck:
+      test: ["CMD-SHELL", "python /home/jovyan/validation/polars_health_check.py --threshold-ms 3000 --data-path /home/jovyan/data --quiet"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "3g"
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile.ifrs9-airflow
+    container_name: airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      POLARS_MAX_THREADS: ${POLARS_MAX_THREADS:-4}
+    command: webserver
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT:-0}:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./src:/opt/airflow/src
+      - ./validation:/opt/airflow/validation
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "python /opt/airflow/validation/polars_health_check.py --threshold-ms 4000 --data-path /opt/airflow/data --quiet"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "2g"
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile.ifrs9-airflow
+    container_name: airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      POLARS_MAX_THREADS: ${POLARS_MAX_THREADS:-4}
+    command: scheduler
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./src:/opt/airflow/src
+      - ./validation:/opt/airflow/validation
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "python /opt/airflow/validation/polars_health_check.py --threshold-ms 4000 --data-path /opt/airflow/data --quiet"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "2g"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-0}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: always
+
+volumes:
+  postgres-db-volume:

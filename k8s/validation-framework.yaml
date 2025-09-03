@@ -1,0 +1,436 @@
+# IFRS9 Containerized Validation Framework - Kubernetes Deployment
+# Comprehensive validation testing for containerized infrastructure
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ifrs9-validation
+  labels:
+    name: ifrs9-validation
+    component: testing
+    version: v1.0.0
+
+---
+# ConfigMap for validation configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: validation-config
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: config
+data:
+  validation_settings.yaml: |
+    global_settings:
+      max_parallel_suites: 3
+      result_retention_days: 30
+      detailed_logging: true
+      export_prometheus_metrics: true
+      
+    dataset_generation:
+      output_format: ['csv', 'parquet']
+      compression: 'gzip'
+      max_records_per_file: 100000
+      
+    test_execution:
+      default_timeout_seconds: 300
+      retry_attempts: 2
+      parallel_execution: true
+      
+    reporting:
+      generate_html_reports: true
+      export_to_bigquery: true
+      slack_notifications: false
+
+---
+# Secret for sensitive configuration
+apiVersion: v1
+kind: Secret
+metadata:
+  name: validation-secrets
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: secrets
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  bigquery_credentials: "eyJrZXkiOiAidmFsdWUifQo="
+  slack_webhook_url: "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20v"
+  prometheus_auth_token: "dG9rZW4xMjM0NTY="
+
+---
+# PersistentVolumeClaim for validation results
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: validation-results-pvc
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# ServiceAccount with necessary permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: validation-service-account
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: auth
+  annotations:
+    iam.gke.io/gcp-service-account: ifrs9-validation@ifrs9-risk-system.iam.gserviceaccount.com
+
+---
+# ClusterRole for accessing resources across namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ifrs9-validation-reader
+  labels:
+    app: ifrs9-validation
+    component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "prometheusrules"]
+  verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ifrs9-validation-binding
+  labels:
+    app: ifrs9-validation
+    component: rbac
+subjects:
+- kind: ServiceAccount
+  name: validation-service-account
+  namespace: ifrs9-validation
+roleRef:
+  kind: ClusterRole
+  name: ifrs9-validation-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Deployment for validation framework
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ifrs9-validation-framework
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: framework
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Single instance to avoid conflicts
+  selector:
+    matchLabels:
+      app: ifrs9-validation
+      component: framework
+  template:
+    metadata:
+      labels:
+        app: ifrs9-validation
+        component: framework
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: validation-service-account
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        
+      containers:
+      - name: validation-framework
+        image: gcr.io/ifrs9-risk-system/ifrs9-validation:latest
+        imagePullPolicy: IfNotPresent
+        
+        env:
+        - name: VALIDATION_ENV
+          value: "kubernetes"
+        - name: PYTHONPATH
+          value: "/app"
+        - name: KUBE_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+              
+        # Configuration from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: validation-config
+            
+        # Secrets
+        env:
+        - name: BIGQUERY_CREDENTIALS_JSON
+          valueFrom:
+            secretKeyRef:
+              name: validation-secrets
+              key: bigquery_credentials
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: validation-secrets
+              key: slack_webhook_url
+              
+        ports:
+        - containerPort: 8080
+          name: http-metrics
+          protocol: TCP
+        - containerPort: 8090
+          name: http-health
+          protocol: TCP
+          
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m" 
+            memory: "4Gi"
+            
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+          
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8090
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 2
+          
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Needs write for datasets
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+            
+        # Volume mounts
+        volumeMounts:
+        - name: validation-results
+          mountPath: /app/validation/results
+        - name: validation-datasets
+          mountPath: /app/validation/datasets
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: config-volume
+          mountPath: /app/config/validation
+          readOnly: true
+        - name: secrets-volume
+          mountPath: /app/secrets
+          readOnly: true
+          
+      volumes:
+      - name: validation-results
+        persistentVolumeClaim:
+          claimName: validation-results-pvc
+      - name: validation-datasets
+        emptyDir:
+          sizeLimit: "5Gi"
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: "1Gi"
+      - name: config-volume
+        configMap:
+          name: validation-config
+      - name: secrets-volume
+        secret:
+          secretName: validation-secrets
+          
+      # Node affinity for better placement
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: cloud.google.com/gke-nodepool
+                operator: In
+                values: ["default-pool"]
+                
+      # Tolerations for dedicated nodes
+      tolerations:
+      - key: "validation-dedicated"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+# Service for metrics exposure
+apiVersion: v1
+kind: Service
+metadata:
+  name: validation-framework-service
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: framework
+spec:
+  selector:
+    app: ifrs9-validation
+    component: framework
+  ports:
+  - name: http-metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: http-health
+    port: 8090
+    targetPort: 8090
+    protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus scraping
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: validation-framework-monitor
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: ifrs9-validation
+      component: framework
+  endpoints:
+  - port: http-metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+# CronJob for scheduled validation runs
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scheduled-validation
+  namespace: ifrs9-validation
+  labels:
+    app: ifrs9-validation
+    component: scheduler
+spec:
+  # Run every 6 hours
+  schedule: "0 */6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600  # 1 hour timeout
+      
+      template:
+        metadata:
+          labels:
+            app: ifrs9-validation
+            component: cronjob
+        spec:
+          serviceAccountName: validation-service-account
+          restartPolicy: Never
+          
+          containers:
+          - name: validation-runner
+            image: gcr.io/ifrs9-risk-system/ifrs9-validation:latest
+            
+            command: ["python"]
+            args: ["/app/scripts/run_containerized_validation.py", "--verbose"]
+            
+            env:
+            - name: VALIDATION_ENV
+              value: "scheduled"
+            - name: PYTHONPATH
+              value: "/app"
+              
+            envFrom:
+            - configMapRef:
+                name: validation-config
+                
+            env:
+            - name: BIGQUERY_CREDENTIALS_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: validation-secrets
+                  key: bigquery_credentials
+                  
+            resources:
+              requests:
+                cpu: "1000m"
+                memory: "2Gi"
+              limits:
+                cpu: "4000m"
+                memory: "8Gi"
+                
+            volumeMounts:
+            - name: validation-results
+              mountPath: /app/validation/results
+            - name: tmp-volume
+              mountPath: /tmp
+              
+          volumes:
+          - name: validation-results
+            persistentVolumeClaim:
+              claimName: validation-results-pvc
+          - name: tmp-volume
+            emptyDir:
+              sizeLimit: "2Gi"

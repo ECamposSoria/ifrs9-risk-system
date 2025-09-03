@@ -1,0 +1,94 @@
+# IFRS9 Containerized Validation Framework
+# Docker container for running comprehensive validation testing
+FROM python:3.11-slim
+
+LABEL maintainer="IFRS9 Risk System Team"
+LABEL description="Containerized validation framework for IFRS9 infrastructure"
+LABEL version="1.0.0"
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV VALIDATION_ENV=container
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install kubectl for Kubernetes integration
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
+
+# Create app directory and user
+RUN groupadd -r ifrs9 && useradd -r -g ifrs9 -d /app -s /bin/bash ifrs9
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt /app/
+COPY validation/requirements-validation.txt /app/validation/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r validation/requirements-validation.txt
+
+# Copy validation framework code
+COPY validation/ /app/validation/
+COPY scripts/run_containerized_validation.py /app/scripts/
+COPY src/ /app/src/
+COPY config/ /app/config/
+
+# Create directories for outputs
+RUN mkdir -p /app/validation/datasets \
+    && mkdir -p /app/validation/results \
+    && mkdir -p /app/logs \
+    && chown -R ifrs9:ifrs9 /app
+
+# Switch to non-root user
+USER ifrs9
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.path.append('/app'); from validation.containerized_validation_framework import ContainerizedValidationFramework; print('OK')" || exit 1
+
+# Default command
+CMD ["python", "/app/scripts/run_containerized_validation.py", "--verbose"]
+
+# Multi-stage build option for smaller production image
+FROM python:3.11-slim as production
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV VALIDATION_ENV=production
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
+
+# Copy from build stage
+COPY --from=0 /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=0 /usr/local/bin /usr/local/bin
+COPY --from=0 /app /app
+
+RUN groupadd -r ifrs9 && useradd -r -g ifrs9 -d /app -s /bin/bash ifrs9 \
+    && chown -R ifrs9:ifrs9 /app
+
+USER ifrs9
+WORKDIR /app
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.path.append('/app'); from validation.containerized_validation_framework import ContainerizedValidationFramework; print('OK')" || exit 1
+
+CMD ["python", "/app/scripts/run_containerized_validation.py", "--verbose"]

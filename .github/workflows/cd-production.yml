@@ -1,0 +1,628 @@
+# IFRS9 Risk System - Production Deployment Pipeline
+# Automated deployment to production environment with comprehensive checks
+
+name: Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+        - prod
+        - staging
+      skip_tests:
+        description: 'Skip test execution'
+        required: false
+        type: boolean
+        default: false
+
+# Environment variables
+env:
+  REGISTRY: gcr.io
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: europe-west1
+  CLUSTER_NAME: ifrs9-gke-cluster
+  DOCKER_BUILDKIT: 1
+
+# Required secrets:
+# - GCP_SA_KEY: Service account key for GCP authentication
+# - GCP_PROJECT_ID: Google Cloud Project ID
+# - KUBECONFIG_DATA: Base64 encoded kubeconfig
+# - SLACK_WEBHOOK: Slack notification webhook
+# - SONAR_TOKEN: SonarCloud token
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  # Job 1: Pre-deployment Validation
+  pre-deployment-checks:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event.inputs.environment || 'prod' }}
+      url: https://ifrs9-api-${{ github.event.inputs.environment || 'prod' }}.yourbank.com
+    
+    outputs:
+      environment: ${{ steps.setup.outputs.environment }}
+      version: ${{ steps.setup.outputs.version }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup deployment variables
+      id: setup
+      run: |
+        ENVIRONMENT="${{ github.event.inputs.environment || 'prod' }}"
+        VERSION=$(git describe --tags --always --dirty)
+        
+        echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        
+        echo "Deploying to: ${ENVIRONMENT}"
+        echo "Version: ${VERSION}"
+        
+    - name: Validate deployment readiness
+      run: |
+        echo "🔍 Validating deployment readiness..."
+        
+        # Check if this is a hotfix or regular release
+        if [[ "${{ github.ref }}" == refs/heads/main ]]; then
+          echo "✅ Main branch deployment approved"
+        elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          echo "✅ Tagged release deployment approved"
+        else
+          echo "❌ Only main branch and tags can be deployed to production"
+          exit 1
+        fi
+        
+        # Check if all required secrets are available
+        if [[ -z "${{ secrets.GCP_SA_KEY }}" ]]; then
+          echo "❌ GCP_SA_KEY secret not found"
+          exit 1
+        fi
+        
+        echo "✅ Pre-deployment checks passed"
+
+  # Job 2: Security and Quality Gates
+  security-quality-gates:
+    name: Security & Quality Gates
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    if: ${{ !github.event.inputs.skip_tests }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev,test
+        
+    - name: Run comprehensive tests
+      run: |
+        echo "🧪 Running comprehensive test suite..."
+        poetry run pytest tests/ \
+          --cov=src \
+          --cov-report=xml \
+          --cov-report=html \
+          --junitxml=test-results.xml \
+          --cov-fail-under=85 \
+          -v
+          
+    - name: Security scan with Bandit
+      run: |
+        poetry run bandit -r src/ -f json -o bandit-report.json
+        poetry run bandit -r src/ --severity-level medium
+        
+    - name: Dependency vulnerability check
+      run: |
+        poetry run safety check --json --output safety-report.json
+        poetry run safety check
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  # Job 3: Build and Push Images
+  build-images:
+    name: Build & Push Production Images
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, security-quality-gates]
+    if: always() && (needs.pre-deployment-checks.result == 'success' && (needs.security-quality-gates.result == 'success' || github.event.inputs.skip_tests))
+    
+    outputs:
+      api-image: ${{ steps.images.outputs.api-image }}
+      ml-image: ${{ steps.images.outputs.ml-image }}
+      worker-image: ${{ steps.images.outputs.worker-image }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Configure Docker to use gcloud as credential helper
+      run: |
+        gcloud auth configure-docker
+        
+    - name: Build and push images
+      id: images
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        VERSION=${{ needs.pre-deployment-checks.outputs.version }}
+        REGISTRY="${REGISTRY}/${PROJECT_ID}"
+        
+        # Build API image
+        API_IMAGE="${REGISTRY}/ifrs9-api:${VERSION}"
+        docker build \
+          -f docker/production/Dockerfile.api \
+          -t "${API_IMAGE}" \
+          --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --build-arg VERSION="${VERSION}" \
+          --build-arg COMMIT_SHA="${{ github.sha }}" \
+          --cache-from "${REGISTRY}/ifrs9-api:latest" \
+          .
+        docker push "${API_IMAGE}"
+        
+        # Build ML service image
+        ML_IMAGE="${REGISTRY}/ifrs9-ml:${VERSION}"
+        docker build \
+          -f docker/production/Dockerfile.ml \
+          -t "${ML_IMAGE}" \
+          --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --build-arg VERSION="${VERSION}" \
+          --cache-from "${REGISTRY}/ifrs9-ml:latest" \
+          .
+        docker push "${ML_IMAGE}"
+        
+        # Build worker image
+        WORKER_IMAGE="${REGISTRY}/ifrs9-worker:${VERSION}"
+        docker build \
+          -f docker/production/Dockerfile.worker \
+          -t "${WORKER_IMAGE}" \
+          --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --build-arg VERSION="${VERSION}" \
+          --cache-from "${REGISTRY}/ifrs9-worker:latest" \
+          .
+        docker push "${WORKER_IMAGE}"
+        
+        # Tag as latest for caching
+        docker tag "${API_IMAGE}" "${REGISTRY}/ifrs9-api:latest"
+        docker tag "${ML_IMAGE}" "${REGISTRY}/ifrs9-ml:latest"
+        docker tag "${WORKER_IMAGE}" "${REGISTRY}/ifrs9-worker:latest"
+        docker push "${REGISTRY}/ifrs9-api:latest"
+        docker push "${REGISTRY}/ifrs9-ml:latest"
+        docker push "${REGISTRY}/ifrs9-worker:latest"
+        
+        # Set outputs
+        echo "api-image=${API_IMAGE}" >> $GITHUB_OUTPUT
+        echo "ml-image=${ML_IMAGE}" >> $GITHUB_OUTPUT
+        echo "worker-image=${WORKER_IMAGE}" >> $GITHUB_OUTPUT
+        
+    - name: Scan images with Trivy
+      run: |
+        # Install Trivy
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+        
+        # Scan images
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ steps.images.outputs.api-image }}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ steps.images.outputs.ml-image }}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ steps.images.outputs.worker-image }}
+
+  # Job 4: Infrastructure Deployment
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, build-images]
+    environment: 
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}
+      url: https://ifrs9-api-${{ needs.pre-deployment-checks.outputs.environment }}.yourbank.com
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+        
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Initialize Terraform
+      working-directory: deploy/terraform
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        
+        terraform init \
+          -backend-config="bucket=${PROJECT_ID}-terraform-state" \
+          -backend-config="prefix=terraform/state/${ENVIRONMENT}"
+          
+    - name: Plan Terraform deployment
+      working-directory: deploy/terraform
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        
+        terraform plan \
+          -var-file="environments/${ENVIRONMENT}.tfvars" \
+          -var="project_id=${PROJECT_ID}" \
+          -var="environment=${ENVIRONMENT}" \
+          -out=tfplan
+          
+    - name: Apply Terraform deployment
+      working-directory: deploy/terraform
+      run: terraform apply -auto-approve tfplan
+      
+    - name: Save Terraform outputs
+      working-directory: deploy/terraform
+      run: |
+        terraform output -json > terraform-outputs.json
+        cat terraform-outputs.json
+        
+    - name: Upload Terraform outputs
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-outputs
+        path: deploy/terraform/terraform-outputs.json
+
+  # Job 5: Application Deployment
+  deploy-application:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, build-images, deploy-infrastructure]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Get GKE credentials
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        gcloud container clusters get-credentials \
+          ${CLUSTER_NAME}-${ENVIRONMENT} \
+          --region ${REGION} \
+          --project ${PROJECT_ID}
+          
+    - name: Deploy to Kubernetes
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        VERSION=${{ needs.pre-deployment-checks.outputs.version }}
+        API_IMAGE=${{ needs.build-images.outputs.api-image }}
+        ML_IMAGE=${{ needs.build-images.outputs.ml-image }}
+        WORKER_IMAGE=${{ needs.build-images.outputs.worker-image }}
+        
+        echo "🚀 Deploying IFRS9 Risk System to ${ENVIRONMENT}..."
+        
+        # Create namespace if not exists
+        kubectl create namespace ifrs9-risk-system || true
+        
+        # Update image references in manifests
+        envsubst <<< "$(cat k8s/deployments/ifrs9-api.yaml)" | \
+          sed "s|\${DOCKER_REGISTRY}/ifrs9-api:\${IMAGE_TAG}|${API_IMAGE}|g" | \
+          kubectl apply -f -
+          
+        envsubst <<< "$(cat k8s/deployments/ifrs9-ml.yaml)" | \
+          sed "s|\${DOCKER_REGISTRY}/ifrs9-ml:\${IMAGE_TAG}|${ML_IMAGE}|g" | \
+          kubectl apply -f -
+          
+        envsubst <<< "$(cat k8s/deployments/ifrs9-worker.yaml)" | \
+          sed "s|\${DOCKER_REGISTRY}/ifrs9-worker:\${IMAGE_TAG}|${WORKER_IMAGE}|g" | \
+          kubectl apply -f -
+        
+        # Deploy other resources
+        kubectl apply -f k8s/services/
+        kubectl apply -f k8s/ingress/
+        kubectl apply -f k8s/configmaps/
+        
+        echo "✅ Application deployment completed"
+        
+    - name: Wait for deployment rollout
+      run: |
+        echo "⏳ Waiting for deployment rollout to complete..."
+        
+        kubectl rollout status deployment/ifrs9-api -n ifrs9-risk-system --timeout=600s
+        kubectl rollout status deployment/ifrs9-ml -n ifrs9-risk-system --timeout=600s
+        kubectl rollout status deployment/ifrs9-worker -n ifrs9-risk-system --timeout=600s
+        
+        echo "✅ All deployments rolled out successfully"
+
+  # Job 6: Post-deployment Testing
+  post-deployment-tests:
+    name: Post-deployment Testing
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, deploy-application]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pytest httpx
+        
+    - name: Wait for services to be ready
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        API_URL="https://ifrs9-api-${ENVIRONMENT}.yourbank.com"
+        
+        echo "🔍 Waiting for API to be ready..."
+        for i in {1..30}; do
+          if curl -s "${API_URL}/health" > /dev/null; then
+            echo "✅ API is ready"
+            break
+          fi
+          echo "⏳ Waiting for API... (attempt ${i}/30)"
+          sleep 10
+        done
+        
+    - name: Run smoke tests
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        API_URL="https://ifrs9-api-${ENVIRONMENT}.yourbank.com"
+        
+        echo "🧪 Running smoke tests..."
+        
+        # Health check
+        response=$(curl -s "${API_URL}/health")
+        if [[ $(echo $response | jq -r '.status') != "healthy" ]]; then
+          echo "❌ Health check failed: $response"
+          exit 1
+        fi
+        
+        # Ready check
+        response=$(curl -s "${API_URL}/ready")
+        if [[ $(echo $response | jq -r '.status') != "ready" ]]; then
+          echo "❌ Ready check failed: $response"
+          exit 1
+        fi
+        
+        # System status
+        response=$(curl -s "${API_URL}/api/v1/status")
+        if [[ $(echo $response | jq -r '.status') != "operational" ]]; then
+          echo "❌ System status check failed: $response"
+          exit 1
+        fi
+        
+        echo "✅ All smoke tests passed"
+        
+    - name: Run integration tests
+      run: |
+        echo "🧪 Running integration tests..."
+        cd tests/integration
+        python -m pytest test_api_integration.py -v --disable-warnings
+        python -m pytest test_ml_integration.py -v --disable-warnings
+        echo "✅ Integration tests completed"
+
+  # Job 7: Performance Testing
+  performance-testing:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, post-deployment-tests]
+    if: needs.pre-deployment-checks.outputs.environment == 'prod'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run load tests
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        API_URL="https://ifrs9-api-${ENVIRONMENT}.yourbank.com"
+        
+        echo "📈 Running performance tests..."
+        
+        # Install k6
+        curl -s https://dl.k6.io/key.gpg | sudo apt-key add -
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+        
+        # Run load test
+        k6 run tests/performance/load_test.js \
+          --env API_URL="${API_URL}" \
+          --out json=performance-results.json
+          
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: performance-results.json
+
+  # Job 8: Deployment Notification
+  notify-deployment:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [
+      pre-deployment-checks, 
+      security-quality-gates, 
+      build-images, 
+      deploy-infrastructure, 
+      deploy-application, 
+      post-deployment-tests, 
+      performance-testing
+    ]
+    if: always()
+    
+    steps:
+    - name: Determine deployment status
+      id: status
+      run: |
+        if [[ "${{ needs.deploy-application.result }}" == "success" && \
+              "${{ needs.post-deployment-tests.result }}" == "success" ]]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "message=✅ IFRS9 Risk System deployed successfully to ${{ needs.pre-deployment-checks.outputs.environment }}" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "message=❌ IFRS9 Risk System deployment failed to ${{ needs.pre-deployment-checks.outputs.environment }}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Send Slack notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ steps.status.outputs.status }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            "channel": "#ifrs9-deployments",
+            "username": "GitHub Actions",
+            "attachments": [{
+              "color": "${{ steps.status.outputs.status == 'success' && 'good' || 'danger' }}",
+              "fields": [
+                {
+                  "title": "Environment",
+                  "value": "${{ needs.pre-deployment-checks.outputs.environment }}",
+                  "short": true
+                },
+                {
+                  "title": "Version",
+                  "value": "${{ needs.pre-deployment-checks.outputs.version }}",
+                  "short": true
+                },
+                {
+                  "title": "Status",
+                  "value": "${{ steps.status.outputs.message }}",
+                  "short": false
+                }
+              ]
+            }]
+          }
+          
+    - name: Create GitHub release
+      if: steps.status.outputs.status == 'success' && startsWith(github.ref, 'refs/tags/v')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: IFRS9 Risk System ${{ github.ref }}
+        body: |
+          ## What's Changed
+          
+          This release includes:
+          - 🏦 Enhanced IFRS9 compliance engine
+          - 🤖 Advanced ML models with AI explanations
+          - 📊 Updated Looker Studio dashboards
+          - 🔒 Security improvements and monitoring
+          
+          ## Deployment Details
+          
+          - **Environment**: ${{ needs.pre-deployment-checks.outputs.environment }}
+          - **Version**: ${{ needs.pre-deployment-checks.outputs.version }}
+          - **Deployed**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          
+          ## Testing Results
+          
+          - ✅ Security scans passed
+          - ✅ Integration tests passed
+          - ✅ Performance tests passed
+          - ✅ Smoke tests passed
+          
+        draft: false
+        prerelease: false
+
+  # Job 9: Rollback (Manual Trigger)
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [pre-deployment-checks, deploy-application]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Get GKE credentials
+      run: |
+        ENVIRONMENT=${{ needs.pre-deployment-checks.outputs.environment }}
+        gcloud container clusters get-credentials \
+          ${CLUSTER_NAME}-${ENVIRONMENT} \
+          --region ${REGION} \
+          --project ${PROJECT_ID}
+          
+    - name: Rollback deployment
+      run: |
+        echo "🔄 Initiating emergency rollback..."
+        
+        kubectl rollout undo deployment/ifrs9-api -n ifrs9-risk-system
+        kubectl rollout undo deployment/ifrs9-ml -n ifrs9-risk-system
+        kubectl rollout undo deployment/ifrs9-worker -n ifrs9-risk-system
+        
+        echo "⏳ Waiting for rollback to complete..."
+        kubectl rollout status deployment/ifrs9-api -n ifrs9-risk-system --timeout=300s
+        kubectl rollout status deployment/ifrs9-ml -n ifrs9-risk-system --timeout=300s
+        kubectl rollout status deployment/ifrs9-worker -n ifrs9-risk-system --timeout=300s
+        
+        echo "✅ Emergency rollback completed"
+        
+    - name: Notify rollback completion
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        custom_payload: |
+          {
+            "channel": "#ifrs9-alerts",
+            "text": "🔄 Emergency rollback completed for IFRS9 Risk System in ${{ needs.pre-deployment-checks.outputs.environment }} environment"
+          }

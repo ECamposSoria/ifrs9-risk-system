@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ifrs9
+  namespace: argocd
+spec:
+  description: IFRS9 platform projects
+  sourceRepos:
+    - '*'
+  destinations:
+    - namespace: ifrs9
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+

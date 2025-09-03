@@ -1,0 +1,444 @@
+# IFRS9 Pipeline Monitoring Configuration
+# Comprehensive monitoring setup for pipeline orchestration, performance tracking, and alerting
+
+# Prometheus Configuration
+prometheus:
+  enabled: true
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  retention_time: 90d
+  
+  # Airflow Metrics Collection
+  airflow_metrics:
+    - name: ifrs9_pipeline_duration_seconds
+      type: histogram
+      description: "Duration of IFRS9 pipeline execution in seconds"
+      labels: ["pipeline_id", "execution_date", "status"]
+      buckets: [60, 300, 600, 1800, 3600, 7200, 14400]
+      
+    - name: ifrs9_task_duration_seconds
+      type: histogram
+      description: "Duration of individual IFRS9 tasks in seconds"
+      labels: ["task_id", "agent", "status"]
+      buckets: [10, 30, 60, 180, 300, 600, 1800]
+      
+    - name: ifrs9_data_quality_score
+      type: gauge
+      description: "Data quality score from validation stage"
+      labels: ["pipeline_id", "data_type"]
+      
+    - name: ifrs9_ml_model_accuracy
+      type: gauge
+      description: "ML model accuracy metrics"
+      labels: ["model_type", "pipeline_id"]
+      
+    - name: ifrs9_sla_compliance
+      type: gauge
+      description: "SLA compliance indicator (1=compliant, 0=breach)"
+      labels: ["task_id", "sla_type"]
+      
+    - name: ifrs9_error_count
+      type: counter
+      description: "Number of errors encountered in pipeline"
+      labels: ["task_id", "error_type", "severity"]
+      
+    - name: ifrs9_records_processed
+      type: gauge
+      description: "Number of records processed by pipeline"
+      labels: ["pipeline_id", "stage"]
+      
+    - name: ifrs9_ecl_total_amount
+      type: gauge
+      description: "Total ECL amount calculated by IFRS9 rules"
+      labels: ["pipeline_id", "currency"]
+      
+    - name: ifrs9_coverage_ratio
+      type: gauge
+      description: "ECL coverage ratio"
+      labels: ["pipeline_id"]
+
+# Grafana Dashboard Configuration
+grafana:
+  enabled: true
+  dashboards:
+    
+    # Executive Dashboard
+    - name: "IFRS9 Executive Overview"
+      uid: "ifrs9-exec-overview"
+      tags: ["ifrs9", "executive", "overview"]
+      refresh: "1m"
+      time_range: "7d"
+      panels:
+        - title: "Pipeline Success Rate"
+          type: "stat"
+          metric: "ifrs9_pipeline_success_rate"
+          target: 99.5
+          thresholds:
+            - color: "red"
+              value: 95
+            - color: "yellow" 
+              value: 98
+            - color: "green"
+              value: 99.5
+              
+        - title: "Average Processing Time"
+          type: "stat"
+          metric: "avg(ifrs9_pipeline_duration_seconds) / 60"
+          unit: "minutes"
+          target: 120
+          
+        - title: "Current Data Quality Score"
+          type: "gauge"
+          metric: "ifrs9_data_quality_score"
+          min: 0
+          max: 100
+          target: 95
+          
+        - title: "SLA Compliance Trend"
+          type: "timeseries"
+          metric: "ifrs9_sla_compliance"
+          timeRange: "7d"
+          
+        - title: "Total ECL Amount"
+          type: "stat"
+          metric: "ifrs9_ecl_total_amount"
+          unit: "currency"
+          format: "$0,0.00"
+          
+        - title: "Pipeline Execution History"
+          type: "table"
+          metrics:
+            - "ifrs9_pipeline_duration_seconds"
+            - "ifrs9_data_quality_score" 
+            - "ifrs9_sla_compliance"
+          timeRange: "30d"
+    
+    # Operations Dashboard
+    - name: "IFRS9 Operations Monitoring"
+      uid: "ifrs9-ops-monitoring"
+      tags: ["ifrs9", "operations", "monitoring"]
+      refresh: "30s"
+      time_range: "24h"
+      panels:
+        - title: "Real-time Pipeline Status"
+          type: "status-panel"
+          metric: "ifrs9_pipeline_status"
+          
+        - title: "Task Execution Times"
+          type: "heatmap"
+          metric: "ifrs9_task_duration_seconds"
+          
+        - title: "Error Rate by Task"
+          type: "bargraph"
+          metric: "rate(ifrs9_error_count[5m])"
+          
+        - title: "Agent Performance"
+          type: "timeseries"
+          metrics:
+            - "ifrs9_agent_cpu_usage"
+            - "ifrs9_agent_memory_usage"
+            - "ifrs9_agent_response_time"
+            
+        - title: "Data Processing Volume"
+          type: "timeseries"
+          metric: "ifrs9_records_processed"
+          
+        - title: "SLA Compliance by Task"
+          type: "table"
+          metric: "ifrs9_sla_compliance"
+          groupBy: ["task_id"]
+    
+    # Technical Dashboard
+    - name: "IFRS9 Technical Metrics"
+      uid: "ifrs9-tech-metrics"
+      tags: ["ifrs9", "technical", "performance"]
+      refresh: "15s"
+      time_range: "6h"
+      panels:
+        - title: "System Resource Usage"
+          type: "timeseries"
+          metrics:
+            - "node_cpu_usage_percent"
+            - "node_memory_usage_percent"
+            - "node_disk_usage_percent"
+            
+        - title: "Airflow Task Queue"
+          type: "stat"
+          metric: "airflow_task_queue_length"
+          
+        - title: "Database Connection Pool"
+          type: "gauge"
+          metric: "airflow_database_connections"
+          
+        - title: "ML Model Performance"
+          type: "timeseries"
+          metrics:
+            - "ifrs9_ml_model_accuracy"
+            - "ifrs9_ml_model_prediction_time"
+            
+        - title: "Data Quality Metrics"
+          type: "timeseries"
+          metrics:
+            - "ifrs9_data_completeness"
+            - "ifrs9_data_consistency"
+            - "ifrs9_data_accuracy"
+
+# Alerting Rules Configuration
+alerting:
+  enabled: true
+  
+  # Alert Manager Configuration
+  alertmanager:
+    smtp_server: "smtp.company.com:587"
+    smtp_from: "alerts@company.com"
+    smtp_auth_username: "alerts@company.com"
+    
+  # Alert Rules
+  rules:
+    
+    # Critical Alerts
+    - name: "IFRS9PipelineFailure"
+      severity: "critical"
+      condition: "ifrs9_pipeline_status == 0"
+      duration: "0s"
+      description: "IFRS9 pipeline has failed"
+      summary: "Pipeline {{ $labels.pipeline_id }} failed at stage {{ $labels.current_stage }}"
+      runbook_url: "https://docs.company.com/ifrs9/runbooks/pipeline-failure"
+      notifications:
+        - email: ["ifrs9-team@company.com", "risk-management@company.com"]
+        - slack: "#ifrs9-alerts"
+        - pagerduty: "ifrs9-oncall"
+        
+    - name: "IFRS9SLABreach"
+      severity: "critical"
+      condition: "ifrs9_sla_compliance == 0"
+      duration: "1m"
+      description: "IFRS9 pipeline SLA has been breached"
+      summary: "Task {{ $labels.task_id }} exceeded SLA by {{ $value }}%"
+      notifications:
+        - email: ["ifrs9-team@company.com"]
+        - slack: "#ifrs9-alerts"
+        
+    - name: "IFRS9DataQualityLow"
+      severity: "critical"
+      condition: "ifrs9_data_quality_score < 95"
+      duration: "0s"
+      description: "Data quality score below acceptable threshold"
+      summary: "Data quality score is {{ $value }}% for pipeline {{ $labels.pipeline_id }}"
+      notifications:
+        - email: ["data-quality-team@company.com", "ifrs9-team@company.com"]
+        - slack: "#data-quality-alerts"
+    
+    # Warning Alerts  
+    - name: "IFRS9HighProcessingTime"
+      severity: "warning"
+      condition: "ifrs9_pipeline_duration_seconds > 7200"  # 2 hours
+      duration: "5m"
+      description: "IFRS9 pipeline taking longer than expected"
+      summary: "Pipeline duration is {{ $value }}s, exceeding normal range"
+      notifications:
+        - email: ["ifrs9-team@company.com"]
+        - slack: "#ifrs9-monitoring"
+        
+    - name: "IFRS9HighErrorRate"
+      severity: "warning"
+      condition: "rate(ifrs9_error_count[5m]) > 0.1"
+      duration: "10m"
+      description: "High error rate detected in IFRS9 pipeline"
+      summary: "Error rate is {{ $value }} errors/second"
+      notifications:
+        - email: ["ifrs9-team@company.com"]
+        
+    - name: "IFRS9ModelAccuracyDrift"
+      severity: "warning"
+      condition: "ifrs9_ml_model_accuracy < 85"
+      duration: "15m"
+      description: "ML model accuracy below target threshold"
+      summary: "{{ $labels.model_type }} model accuracy is {{ $value }}%"
+      notifications:
+        - email: ["ml-team@company.com", "ifrs9-team@company.com"]
+        
+    - name: "IFRS9ResourceUtilizationHigh"
+      severity: "warning"
+      condition: "node_cpu_usage_percent > 80 or node_memory_usage_percent > 80"
+      duration: "10m"
+      description: "High resource utilization detected"
+      summary: "{{ $labels.instance }} resource usage: CPU {{ $labels.cpu }}%, Memory {{ $labels.memory }}%"
+      notifications:
+        - email: ["ops-team@company.com"]
+        
+    # Info Alerts
+    - name: "IFRS9PipelineSuccess"
+      severity: "info"
+      condition: "increase(ifrs9_pipeline_success_count[1h]) > 0"
+      duration: "0s"
+      description: "IFRS9 pipeline completed successfully"
+      summary: "Pipeline {{ $labels.pipeline_id }} completed in {{ $labels.duration }}s"
+      notifications:
+        - slack: "#ifrs9-status"
+        
+    - name: "IFRS9ModelRetraining"
+      severity: "info" 
+      condition: "increase(ifrs9_model_training_count[1h]) > 0"
+      duration: "0s"
+      description: "ML models have been retrained"
+      summary: "Models retrained with accuracy: {{ $labels.accuracy }}%"
+      notifications:
+        - email: ["ml-team@company.com"]
+
+# Log Aggregation Configuration
+logging:
+  enabled: true
+  
+  # ELK Stack Configuration
+  elasticsearch:
+    hosts: ["elasticsearch:9200"]
+    index_pattern: "ifrs9-pipeline-logs-*"
+    retention_days: 90
+    
+  logstash:
+    input_paths:
+      - "/opt/airflow/logs/dag_id=ifrs9_enhanced_orchestration_pipeline/**/*.log"
+      - "/opt/airflow/data/processed/**/validation_report.txt"
+      - "/opt/airflow/data/processed/**/execution_summary_*.json"
+      - "/opt/airflow/data/processed/**/failure_report_*.txt"
+      
+    filters:
+      - type: "grok"
+        pattern: "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{GREEDYDATA:message}"
+        
+      - type: "json"
+        source: "message"
+        target: "json_data"
+        
+  kibana:
+    dashboards:
+      - name: "IFRS9 Pipeline Logs"
+        visualizations:
+          - "Log Level Distribution"
+          - "Error Timeline"
+          - "Agent Activity"
+          - "Performance Metrics"
+          
+# Health Checks Configuration
+health_checks:
+  enabled: true
+  interval: "1m"
+  timeout: "30s"
+  
+  endpoints:
+    - name: "airflow_webserver"
+      url: "http://airflow:8080/health"
+      expected_status: 200
+      
+    - name: "airflow_scheduler"
+      url: "http://airflow:8080/api/v1/health"
+      expected_status: 200
+      
+    - name: "postgres_database"
+      type: "postgresql"
+      connection_string: "postgresql://airflow:airflow@postgres:5432/airflow"
+      query: "SELECT 1"
+      
+    - name: "redis_cache"
+      type: "redis"
+      connection_string: "redis://redis:6379/0"
+      
+    - name: "bigquery_connectivity"
+      type: "custom"
+      command: "python /opt/airflow/scripts/check_bigquery.py"
+      
+    - name: "gcs_connectivity"
+      type: "custom"
+      command: "python /opt/airflow/scripts/check_gcs.py"
+
+# Performance Baseline Configuration
+performance_baselines:
+  # Expected processing times (in seconds)
+  task_baselines:
+    generate_synthetic_data: 900      # 15 minutes
+    validate_data: 600               # 10 minutes  
+    process_ifrs9_rules: 2700        # 45 minutes
+    train_ml_models: 1800            # 30 minutes
+    generate_reports: 600            # 10 minutes
+    upload_to_gcs: 1200              # 20 minutes
+    load_to_bigquery: 900            # 15 minutes
+    
+  # Expected data volumes
+  data_baselines:
+    loan_portfolio_records: 50000
+    payment_history_records: 500000
+    customer_records: 10000
+    
+  # Expected quality metrics
+  quality_baselines:
+    data_completeness: 98.0
+    data_accuracy: 99.0
+    model_accuracy: 87.0
+    
+# Compliance and Audit Configuration
+compliance:
+  enabled: true
+  
+  # Regulatory Requirements
+  regulatory_requirements:
+    data_retention_days: 2555        # 7 years
+    audit_trail_completeness: true
+    data_lineage_tracking: true
+    access_logging: true
+    encryption_requirements: true
+    
+  # Audit Trails
+  audit_trails:
+    - type: "pipeline_execution"
+      fields: ["pipeline_id", "start_time", "end_time", "status", "user"]
+      retention_days: 2555
+      
+    - type: "data_access"
+      fields: ["user", "timestamp", "data_accessed", "action"]
+      retention_days: 2555
+      
+    - type: "configuration_changes"
+      fields: ["user", "timestamp", "component", "old_value", "new_value"]
+      retention_days: 2555
+      
+    - type: "model_predictions"
+      fields: ["model_version", "timestamp", "input_features", "prediction", "confidence"]
+      retention_days: 365
+
+# Integration Configuration
+integrations:
+  # Slack Integration
+  slack:
+    enabled: true
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channels:
+      alerts: "#ifrs9-alerts"
+      monitoring: "#ifrs9-monitoring" 
+      status: "#ifrs9-status"
+      
+  # Email Integration
+  email:
+    enabled: true
+    smtp_server: "smtp.company.com"
+    port: 587
+    use_tls: true
+    username: "${EMAIL_USERNAME}"
+    password: "${EMAIL_PASSWORD}"
+    
+  # PagerDuty Integration
+  pagerduty:
+    enabled: true
+    integration_key: "${PAGERDUTY_INTEGRATION_KEY}"
+    severity_mapping:
+      critical: "critical"
+      warning: "warning"
+      info: "info"
+      
+# Configuration Metadata
+metadata:
+  version: "1.0.0"
+  created_by: "ifrs9-orchestrator"
+  created_timestamp: null
+  last_updated_timestamp: null
+  configuration_hash: null

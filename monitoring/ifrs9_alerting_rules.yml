@@ -1,0 +1,353 @@
+# IFRS9 Alerting Rules for Production Monitoring
+# Comprehensive alerting for SLA violations, system health, and business metrics
+
+groups:
+  # Critical System Health Alerts
+  - name: ifrs9.critical.system
+    interval: 30s
+    rules:
+      - alert: IFRS9PipelineFailure
+        expr: ifrs9_pipeline_status == 0
+        for: 0s
+        labels:
+          severity: critical
+          service: ifrs9
+          team: risk-management
+        annotations:
+          summary: "IFRS9 pipeline {{ $labels.pipeline_id }} has failed"
+          description: "Pipeline {{ $labels.pipeline_id }} failed at stage {{ $labels.current_stage }}. Immediate investigation required."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/pipeline-failure"
+          dashboard_url: "https://grafana.company.com/d/ifrs9-ops-monitoring"
+
+      - alert: IFRS9SLABreach
+        expr: ifrs9_sla_compliance == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ifrs9
+          team: risk-management
+        annotations:
+          summary: "IFRS9 SLA breach detected for task {{ $labels.task_id }}"
+          description: "Task {{ $labels.task_id }} has breached its SLA. Current execution time exceeds {{ $value }} minutes."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/sla-breach"
+
+      - alert: IFRS9DataQualityLow
+        expr: ifrs9_data_quality_score < 95
+        for: 0s
+        labels:
+          severity: critical
+          service: ifrs9
+          team: data-quality
+        annotations:
+          summary: "IFRS9 data quality score below threshold"
+          description: "Data quality score is {{ $value }}% for pipeline {{ $labels.pipeline_id }}, below the 95% threshold."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/data-quality"
+
+      - alert: IFRS9AgentDown
+        expr: up{job=~"ifrs9-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ifrs9
+          agent: "{{ $labels.job }}"
+        annotations:
+          summary: "IFRS9 agent {{ $labels.job }} is down"
+          description: "Agent {{ $labels.job }} has been down for more than 2 minutes. Service unavailable."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/agent-down"
+
+  # High Severity Performance Alerts
+  - name: ifrs9.high.performance
+    interval: 1m
+    rules:
+      - alert: IFRS9HighProcessingTime
+        expr: ifrs9_pipeline_duration_seconds > 7200  # 2 hours
+        for: 5m
+        labels:
+          severity: high
+          service: ifrs9
+          team: performance
+        annotations:
+          summary: "IFRS9 pipeline processing time exceeds 2 hours"
+          description: "Pipeline {{ $labels.pipeline_id }} duration is {{ $value }}s, exceeding the 2-hour threshold."
+          
+      - alert: IFRS9HighErrorRate
+        expr: rate(ifrs9_error_count[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: high
+          service: ifrs9
+          team: reliability
+        annotations:
+          summary: "High error rate in IFRS9 pipeline"
+          description: "Error rate is {{ $value }} errors/second over the last 5 minutes."
+
+      - alert: IFRS9MLModelAccuracyDrift
+        expr: ifrs9_ml_model_accuracy < 85
+        for: 15m
+        labels:
+          severity: high
+          service: ifrs9
+          team: ml-engineering
+          model_type: "{{ $labels.model_type }}"
+        annotations:
+          summary: "ML model accuracy below threshold"
+          description: "{{ $labels.model_type }} model accuracy is {{ $value }}%, below the 85% threshold."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/model-drift"
+
+      - alert: IFRS9ResourceUtilizationHigh
+        expr: (node_cpu_usage_percent{job="node-exporter"} > 80) or (node_memory_usage_percent{job="node-exporter"} > 80)
+        for: 10m
+        labels:
+          severity: high
+          service: infrastructure
+          team: ops
+        annotations:
+          summary: "High resource utilization detected"
+          description: "Node {{ $labels.instance }} has high resource usage: CPU {{ $labels.cpu }}%, Memory {{ $labels.memory }}%."
+
+  # Medium Severity Business Logic Alerts
+  - name: ifrs9.medium.business
+    interval: 2m
+    rules:
+      - alert: IFRS9ECLVariationHigh
+        expr: |
+          (
+            abs(ifrs9_ecl_total_amount - ifrs9_ecl_total_amount offset 1d) / 
+            ifrs9_ecl_total_amount offset 1d
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: risk-management
+        annotations:
+          summary: "ECL amount shows high day-over-day variation"
+          description: "ECL total amount has changed by {{ $value }}% compared to previous day. Review required."
+          
+      - alert: IFRS9StagingDistributionAnomaly
+        expr: |
+          (
+            abs(ifrs9_staging_distribution{stage="2"} - ifrs9_staging_distribution{stage="2"} offset 1h)
+          ) > 5
+        for: 10m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: risk-management
+        annotations:
+          summary: "Unusual staging distribution detected"
+          description: "Stage 2 portfolio distribution has changed by {{ $value }}% in the last hour."
+
+      - alert: IFRS9DataVolumeAnomaly
+        expr: |
+          (
+            abs(ifrs9_records_processed - ifrs9_records_processed offset 1d) / 
+            ifrs9_records_processed offset 1d
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: data-engineering
+        annotations:
+          summary: "Data volume shows significant variation"
+          description: "Processed records count has changed by {{ $value }}% compared to previous day."
+
+  # Integration and External System Alerts
+  - name: ifrs9.integration.external
+    interval: 1m
+    rules:
+      - alert: IFRS9BigQueryConnectionFailure
+        expr: ifrs9_bigquery_connection_status == 0
+        for: 2m
+        labels:
+          severity: high
+          service: ifrs9
+          team: integration
+          external_system: bigquery
+        annotations:
+          summary: "BigQuery connection failure"
+          description: "Unable to connect to BigQuery for {{ $value }} consecutive attempts."
+          runbook_url: "https://docs.company.com/ifrs9/runbooks/bigquery-connection"
+
+      - alert: IFRS9GCSUploadFailure
+        expr: rate(ifrs9_gcs_upload_failures[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: integration
+          external_system: gcs
+        annotations:
+          summary: "GCS upload failure rate elevated"
+          description: "GCS upload failure rate is {{ $value }} per second over the last 5 minutes."
+
+      - alert: IFRS9PostgreSQLConnectionPoolExhausted
+        expr: ifrs9_postgres_connection_pool_active / ifrs9_postgres_connection_pool_max > 0.9
+        for: 3m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: database
+        annotations:
+          summary: "PostgreSQL connection pool nearly exhausted"
+          description: "Connection pool utilization is {{ $value }}%, approaching the limit."
+
+  # Polars Performance Monitoring
+  - name: ifrs9.polars.performance
+    interval: 1m
+    rules:
+      - alert: IFRS9PolarsMemoryUsageHigh
+        expr: ifrs9_polars_memory_usage_bytes / (1024*1024*1024) > 8  # 8GB
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: performance
+          component: polars
+        annotations:
+          summary: "Polars memory usage exceeds 8GB"
+          description: "Polars is using {{ $value }}GB of memory, which may impact performance."
+
+      - alert: IFRS9PolarsQueryTimeout
+        expr: ifrs9_polars_query_duration_seconds > 300  # 5 minutes
+        for: 0s
+        labels:
+          severity: high
+          service: ifrs9
+          team: performance
+          component: polars
+        annotations:
+          summary: "Polars query taking too long"
+          description: "Polars query has been running for {{ $value }} seconds, exceeding 5-minute threshold."
+
+  # Agent-Specific Performance Alerts
+  - name: ifrs9.agents.performance
+    interval: 1m
+    rules:
+      - alert: IFRS9RulesEngineLatency
+        expr: histogram_quantile(0.95, ifrs9_rules_engine_processing_duration_seconds) > 30
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: rules-engine
+          agent: rules-engine
+        annotations:
+          summary: "Rules engine high latency detected"
+          description: "95th percentile processing time is {{ $value }} seconds, exceeding 30s threshold."
+
+      - alert: IFRS9MLModelsPredictionLatency
+        expr: histogram_quantile(0.95, ifrs9_ml_models_prediction_duration_seconds) > 10
+        for: 5m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: ml-engineering
+          agent: ml-models
+        annotations:
+          summary: "ML models prediction latency high"
+          description: "95th percentile prediction time is {{ $value }} seconds, exceeding 10s threshold."
+
+      - alert: IFRS9ValidatorThroughputLow
+        expr: rate(ifrs9_validator_records_processed[5m]) < 100
+        for: 10m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: data-quality
+          agent: validator
+        annotations:
+          summary: "Validator throughput below expected rate"
+          description: "Validator is processing {{ $value }} records/second, below 100 records/second threshold."
+
+  # Compliance and Regulatory Alerts
+  - name: ifrs9.compliance.regulatory
+    interval: 5m
+    rules:
+      - alert: IFRS9AuditTrailIncomplete
+        expr: ifrs9_audit_trail_completeness < 1.0
+        for: 0s
+        labels:
+          severity: critical
+          service: ifrs9
+          team: compliance
+        annotations:
+          summary: "Audit trail incomplete"
+          description: "Audit trail completeness is {{ $value }}, indicating missing audit records."
+
+      - alert: IFRS9RegulatoryReportingDelayed
+        expr: time() - ifrs9_last_regulatory_report_timestamp > 86400  # 24 hours
+        for: 0s
+        labels:
+          severity: high
+          service: ifrs9
+          team: reporting
+        annotations:
+          summary: "Regulatory reporting delayed"
+          description: "Last regulatory report was generated {{ $value }} seconds ago, exceeding 24-hour requirement."
+
+      - alert: IFRS9DataRetentionViolation
+        expr: ifrs9_data_retention_violations > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: ifrs9
+          team: compliance
+        annotations:
+          summary: "Data retention policy violation detected"
+          description: "{{ $value }} data retention violations detected. Immediate compliance review required."
+
+  # Recovery and Self-Healing Alerts
+  - name: ifrs9.recovery.selfhealing
+    interval: 30s
+    rules:
+      - alert: IFRS9AutoRecoveryTriggered
+        expr: increase(ifrs9_auto_recovery_attempts[5m]) > 0
+        for: 0s
+        labels:
+          severity: info
+          service: ifrs9
+          team: reliability
+        annotations:
+          summary: "Auto-recovery mechanism triggered"
+          description: "{{ $value }} auto-recovery attempts in the last 5 minutes for component {{ $labels.component }}."
+
+      - alert: IFRS9AutoRecoveryFailed
+        expr: ifrs9_auto_recovery_failures > 3
+        for: 1m
+        labels:
+          severity: high
+          service: ifrs9
+          team: reliability
+        annotations:
+          summary: "Auto-recovery mechanism failing"
+          description: "Auto-recovery has failed {{ $value }} times. Manual intervention required."
+
+  # Business KPI Monitoring
+  - name: ifrs9.business.kpis
+    interval: 5m
+    rules:
+      - alert: IFRS9ProcessingWindow150MinutesBreach
+        expr: ifrs9_pipeline_duration_seconds > 9000  # 150 minutes
+        for: 0s
+        labels:
+          severity: critical
+          service: ifrs9
+          team: business
+          kpi: processing_window
+        annotations:
+          summary: "150-minute processing window breached"
+          description: "Pipeline processing time {{ $value }} seconds exceeds the critical 150-minute business requirement."
+          escalation: "immediate"
+          
+      - alert: IFRS9BusinessMetricsUnavailable
+        expr: up{job="ifrs9-business-metrics"} == 0
+        for: 2m
+        labels:
+          severity: medium
+          service: ifrs9
+          team: business
+        annotations:
+          summary: "Business metrics collector unavailable"
+          description: "Unable to collect business metrics for monitoring and reporting."

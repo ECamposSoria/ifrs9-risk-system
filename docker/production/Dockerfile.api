@@ -1,0 +1,421 @@
+# IFRS9 Risk System - Production API Dockerfile
+# Multi-stage build for optimized API service container
+
+# Build stage
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG BUILD_DATE
+ARG VERSION
+ARG COMMIT_SHA
+
+# Metadata
+LABEL maintainer="IFRS9 Team <data-team@bank.com>"
+LABEL version="${VERSION}"
+LABEL description="IFRS9 Risk System API Service"
+LABEL build-date="${BUILD_DATE}"
+LABEL vcs-url="https://github.com/bank/ifrs9-risk-system"
+LABEL vcs-ref="${COMMIT_SHA}"
+
+# Set build environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry==1.7.1
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install Python dependencies
+RUN poetry install --no-dev --no-root && rm -rf $POETRY_CACHE_DIR
+
+# Production stage
+FROM python:3.11-slim as production
+
+# Set runtime arguments
+ARG BUILD_DATE
+ARG VERSION
+ARG COMMIT_SHA
+
+# Metadata for production image
+LABEL maintainer="IFRS9 Team <data-team@bank.com>"
+LABEL version="${VERSION}"
+LABEL description="IFRS9 Risk System API Service - Production"
+LABEL build-date="${BUILD_DATE}"
+LABEL vcs-ref="${COMMIT_SHA}"
+
+# Create non-root user
+RUN groupadd -r ifrs9 && useradd -r -g ifrs9 -u 1000 ifrs9
+
+# Set runtime environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PATH="/app/.venv/bin:$PATH" \
+    USER=ifrs9 \
+    UID=1000 \
+    GID=1000
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tini \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
+
+# Copy virtual environment from builder stage
+COPY --from=builder --chown=ifrs9:ifrs9 /.venv /app/.venv
+
+# Create application directories
+RUN mkdir -p /app/src \
+             /app/config \
+             /app/logs \
+             /app/cache \
+             /app/credentials \
+             /tmp/app \
+    && chown -R ifrs9:ifrs9 /app /tmp/app
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=ifrs9:ifrs9 src/ /app/src/
+COPY --chown=ifrs9:ifrs9 config/ /app/config/
+COPY --chown=ifrs9:ifrs9 scripts/ /app/scripts/
+
+# Copy startup scripts
+COPY --chown=ifrs9:ifrs9 docker/production/entrypoint.sh /app/entrypoint.sh
+COPY --chown=ifrs9:ifrs9 docker/production/healthcheck.py /app/healthcheck.py
+COPY --chown=ifrs9:ifrs9 docker/production/init_db.py /app/init_db.py
+
+# Make scripts executable
+RUN chmod +x /app/entrypoint.sh /app/scripts/*.sh
+
+# Create FastAPI application
+COPY --chown=ifrs9:ifrs9 <<EOF /app/main.py
+"""
+IFRS9 Risk System API
+Production FastAPI application
+"""
+
+import os
+import logging
+import uvicorn
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
+import asyncpg
+import httpx
+
+from src.ifrs9_engine import IFRS9Engine
+from src.ml_model import CreditRiskClassifier
+from src.gcp_integrations import GCPIntegration
+from src.ai_explanations import IFRS9ExplainerCore
+from src.security.security_middleware import (
+    SecurityHeadersMiddleware,
+    RequestSizeLimitMiddleware,
+    SimpleRateLimiter,
+    jwt_guard,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO')),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Global objects
+ifrs9_engine = None
+ml_model = None
+gcp_client = None
+explainer = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager"""
+    global ifrs9_engine, ml_model, gcp_client, explainer
+    
+    # Startup
+    logger.info("Starting IFRS9 API service...")
+    
+    # Initialize components
+    ifrs9_engine = IFRS9Engine()
+    ml_model = CreditRiskClassifier()
+    gcp_client = GCPIntegration()
+    explainer = IFRS9ExplainerCore()
+    
+    # Load pre-trained models
+    try:
+        ml_model.load_models()
+        logger.info("ML models loaded successfully")
+    except Exception as e:
+        logger.warning(f"Could not load ML models: {e}")
+    
+    logger.info("IFRS9 API service started successfully")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down IFRS9 API service...")
+    
+    # Close connections
+    if gcp_client:
+        await gcp_client.close()
+    
+    logger.info("IFRS9 API service shutdown complete")
+
+# Create FastAPI app
+app = FastAPI(
+    title="IFRS9 Risk System API",
+    description="Credit risk management and IFRS9 compliance API",
+    version=os.getenv('VERSION', '1.0.0'),
+    lifespan=lifespan,
+    docs_url="/docs" if os.getenv('ENVIRONMENT') != 'prod' else None,
+    redoc_url="/redoc" if os.getenv('ENVIRONMENT') != 'prod' else None
+)
+
+# Add middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if os.getenv('ENVIRONMENT') == 'dev' else [],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Enforce HTTPS in non-dev if behind TLS terminator
+if os.getenv('ENVIRONMENT') in ('staging', 'prod', 'production'):
+    app.add_middleware(HTTPSRedirectMiddleware)
+    # restrict hosts if provided
+    allowed_hosts = os.getenv('TRUSTED_HOSTS', '').split(',') if os.getenv('TRUSTED_HOSTS') else ['*']
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+app.add_middleware(SecurityHeadersMiddleware, enable_hsts=os.getenv('ENABLE_HSTS','false').lower() in ('1','true'), csp=os.getenv('CSP_POLICY'))
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=int(os.getenv('MAX_REQUEST_BYTES', '2000000')))
+app.add_middleware(SimpleRateLimiter, window_sec=int(os.getenv('RATE_LIMIT_WINDOW','60')), max_requests=int(os.getenv('RATE_LIMIT_MAX','120')))
+
+# Prometheus metrics
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
+
+# Health check endpoints
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "ifrs9-api"}
+
+@app.get("/ready", tags=["Health"])
+async def readiness_check():
+    """Readiness check endpoint"""
+    checks = {
+        "ifrs9_engine": ifrs9_engine is not None,
+        "ml_model": ml_model is not None,
+        "gcp_client": gcp_client is not None,
+    }
+    
+    if all(checks.values()):
+        return {"status": "ready", "checks": checks}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not ready", "checks": checks}
+        )
+
+# API endpoints
+@app.post("/api/v1/calculate/staging", tags=["IFRS9"])
+async def calculate_staging(loan_data: dict, claims = Depends(jwt_guard)):
+    """Calculate IFRS9 staging for loan portfolio"""
+    try:
+        results = ifrs9_engine.calculate_staging(loan_data)
+        return {"results": results, "status": "success"}
+    except Exception as e:
+        logger.error(f"Staging calculation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Staging calculation failed: {str(e)}"
+        )
+
+@app.post("/api/v1/calculate/ecl", tags=["IFRS9"])
+async def calculate_ecl(loan_data: dict, claims = Depends(jwt_guard)):
+    """Calculate Expected Credit Loss"""
+    try:
+        results = ifrs9_engine.calculate_ecl(loan_data)
+        return {"results": results, "status": "success"}
+    except Exception as e:
+        logger.error(f"ECL calculation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ECL calculation failed: {str(e)}"
+        )
+
+@app.post("/api/v1/predict/risk", tags=["ML"])
+async def predict_risk(loan_data: dict, claims = Depends(jwt_guard)):
+    """Predict credit risk using ML models"""
+    try:
+        # Prepare features
+        features, _ = ml_model.prepare_features(loan_data)
+        
+        # Predict stage and PD
+        stages, probabilities = ml_model.predict_stage(features)
+        pd_predictions = ml_model.predict_pd(features)
+        
+        return {
+            "predictions": {
+                "stages": stages.tolist(),
+                "probabilities": probabilities.tolist(),
+                "pd_predictions": pd_predictions.tolist()
+            },
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Risk prediction failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Risk prediction failed: {str(e)}"
+        )
+
+@app.get("/api/v1/status", tags=["System"])
+async def get_system_status():
+    """Get system status and metrics"""
+    return {
+        "service": "ifrs9-api",
+        "version": os.getenv('VERSION', '1.0.0'),
+        "environment": os.getenv('ENVIRONMENT', 'unknown'),
+        "status": "operational",
+        "components": {
+            "ifrs9_engine": "healthy",
+            "ml_models": "healthy",
+            "gcp_integration": "healthy",
+        }
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=int(os.getenv('PORT', 8080)),
+        log_level=os.getenv('LOG_LEVEL', 'info').lower(),
+        access_log=True,
+        loop="asyncio"
+    )
+EOF
+
+# Health check script
+COPY --chown=ifrs9:ifrs9 <<EOF /app/healthcheck.py
+#!/usr/bin/env python3
+"""Health check script for IFRS9 API service"""
+
+import sys
+import asyncio
+import httpx
+
+async def check_health():
+    """Check service health"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:8080/health", timeout=5.0)
+            if response.status_code == 200:
+                print("Health check passed")
+                return 0
+            else:
+                print(f"Health check failed with status {response.status_code}")
+                return 1
+    except Exception as e:
+        print(f"Health check failed with error: {e}")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(check_health()))
+EOF
+
+# Switch to non-root user
+USER ifrs9
+
+# Expose ports
+EXPOSE 8080 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python /app/healthcheck.py
+
+# Use tini as init system
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command
+CMD ["/app/entrypoint.sh"]
+EOF
+
+# Create entrypoint script
+COPY --chown=ifrs9:ifrs9 <<'EOF' /app/entrypoint.sh
+#!/bin/bash
+set -euo pipefail
+
+# Environment variables with defaults
+export ENVIRONMENT="${ENVIRONMENT:-development}"
+export PORT="${PORT:-8080}"
+export LOG_LEVEL="${LOG_LEVEL:-INFO}"
+export WORKERS="${WORKERS:-4}"
+
+echo "Starting IFRS9 API service..."
+echo "Environment: $ENVIRONMENT"
+echo "Port: $PORT"
+echo "Log Level: $LOG_LEVEL"
+echo "Workers: $WORKERS"
+
+# Wait for dependencies (if needed)
+if [ -n "${DATABASE_URL:-}" ]; then
+    echo "Waiting for database connection..."
+    python -c "
+import asyncio
+import asyncpg
+import os
+import sys
+
+async def wait_for_db():
+    for i in range(30):
+        try:
+            conn = await asyncpg.connect(os.environ['DATABASE_URL'])
+            await conn.close()
+            print('Database connection successful')
+            return
+        except Exception as e:
+            print(f'Attempt {i+1}/30: Database not ready - {e}')
+            await asyncio.sleep(2)
+    print('Database connection failed after 30 attempts')
+    sys.exit(1)
+
+asyncio.run(wait_for_db())
+"
+fi
+
+# Start the API server
+exec uvicorn main:app \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --workers "$WORKERS" \
+    --log-level "$(echo $LOG_LEVEL | tr '[:upper:]' '[:lower:]')" \
+    --access-log \
+    --no-server-header \
+    --loop asyncio
+EOF

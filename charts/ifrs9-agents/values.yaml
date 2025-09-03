@@ -1,0 +1,84 @@
+namespace: ifrs9
+
+global:
+  imagePullSecrets: []
+  serviceMesh:
+    enabled: true
+    # istio sidecar injection label
+    injectLabel: "istio-injection=enabled"
+
+image:
+  registry: gcr.io/ifrs9-risk-system
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 8080
+
+persistence:
+  enabled: true
+  storageClassName: standard-rwo
+  size: 10Gi
+
+config:
+  env:
+    - name: LOG_LEVEL
+      value: INFO
+    - name: API_JWT_AUDIENCE
+      value: ifrs9-agents
+  # populated by Secret or WI
+  secretEnv:
+    - name: API_JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: ifrs9-secrets
+          key: api_jwt_secret
+
+agents:
+  - name: orchestrator
+    replicas: 2
+    hpa:
+      enabled: true
+      min: 2
+      max: 10
+      cpu: 60
+  - name: validator
+    replicas: 2
+    hpa: { enabled: true, min: 2, max: 10, cpu: 60 }
+  - name: rules-engine
+    replicas: 2
+    hpa: { enabled: true, min: 2, max: 10, cpu: 60 }
+  - name: ml-models
+    replicas: 2
+    hpa: { enabled: true, min: 2, max: 10, cpu: 60 }
+  - name: integrator
+    replicas: 1
+    hpa: { enabled: true, min: 1, max: 5, cpu: 60 }
+  - name: reporter
+    replicas: 1
+    hpa: { enabled: true, min: 1, max: 5, cpu: 60 }
+  - name: data-generator
+    replicas: 1
+    hpa: { enabled: true, min: 1, max: 5, cpu: 60 }
+  - name: debugger
+    replicas: 1
+    hpa: { enabled: true, min: 1, max: 3, cpu: 60 }
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+

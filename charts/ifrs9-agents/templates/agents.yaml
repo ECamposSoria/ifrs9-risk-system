@@ -1,0 +1,115 @@
+{{- $ns := .Values.namespace -}}
+{{- range .Values.agents }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ifrs9-{{ .name }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: ifrs9-{{ .name }}
+spec:
+  replicas: {{ .replicas }}
+  selector:
+    matchLabels:
+      app: ifrs9-{{ .name }}
+  template:
+    metadata:
+      labels:
+        app: ifrs9-{{ .name }}
+        app.kubernetes.io/component: {{ .name }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: {{ .name }}
+          image: {{ $.Values.image.registry }}/{{ .name }}:{{ $.Values.image.tag }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $.Values.service.port }}
+          env:
+            - name: AGENT_NAME
+              value: {{ .name | quote }}
+            {{- range $.Values.config.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            {{- range $.Values.config.secretEnv }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .valueFrom.secretKeyRef.name }}
+                  key: {{ .valueFrom.secretKeyRef.key }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ $.Values.resources.requests.cpu | quote }}
+              memory: {{ $.Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ $.Values.resources.limits.cpu | quote }}
+              memory: {{ $.Values.resources.limits.memory | quote }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: ifrs9-shared-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ifrs9-{{ .name }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: ifrs9-{{ .name }}
+spec:
+  type: {{ $.Values.service.type }}
+  selector:
+    app: ifrs9-{{ .name }}
+  ports:
+    - name: http
+      port: {{ $.Values.service.port }}
+      targetPort: http
+{{- if .hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ifrs9-{{ .name }}
+  namespace: {{ $ns }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ifrs9-{{ .name }}
+  minReplicas: {{ .hpa.min }}
+  maxReplicas: {{ .hpa.max }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .hpa.cpu }}
+{{- end }}
+{{- end }}
+

@@ -1,0 +1,310 @@
+# IFRS9 Recording Rules for Efficient Metric Aggregation
+# Pre-computed aggregations for faster dashboard queries and alerting
+
+groups:
+  # Pipeline Performance Aggregations
+  - name: ifrs9.pipeline.performance
+    interval: 30s
+    rules:
+      # Pipeline success rate calculation
+      - record: ifrs9:pipeline_success_rate
+        expr: |
+          (
+            rate(ifrs9_pipeline_completions{status="success"}[5m]) /
+            rate(ifrs9_pipeline_completions[5m])
+          ) * 100
+
+      # Average pipeline duration by status
+      - record: ifrs9:pipeline_duration_avg_seconds
+        expr: |
+          avg_over_time(ifrs9_pipeline_duration_seconds[5m])
+
+      # Pipeline duration percentiles
+      - record: ifrs9:pipeline_duration_p95_seconds
+        expr: |
+          histogram_quantile(0.95, rate(ifrs9_pipeline_duration_seconds_bucket[5m]))
+
+      - record: ifrs9:pipeline_duration_p99_seconds
+        expr: |
+          histogram_quantile(0.99, rate(ifrs9_pipeline_duration_seconds_bucket[5m]))
+
+      # Task success rate by agent
+      - record: ifrs9:task_success_rate_by_agent
+        expr: |
+          (
+            rate(ifrs9_task_completions{status="success"}[5m]) /
+            rate(ifrs9_task_completions[5m])
+          ) * 100
+
+      # Overall system availability
+      - record: ifrs9:system_availability
+        expr: |
+          (
+            count(up{job=~"ifrs9-.*"} == 1) /
+            count(up{job=~"ifrs9-.*"})
+          ) * 100
+
+  # Business Metrics Aggregations
+  - name: ifrs9.business.metrics
+    interval: 1m
+    rules:
+      # Total ECL amount by currency
+      - record: ifrs9:ecl_total_by_currency
+        expr: |
+          sum(ifrs9_ecl_total_amount) by (currency)
+
+      # ECL coverage ratio calculation
+      - record: ifrs9:ecl_coverage_ratio
+        expr: |
+          (ifrs9_ecl_total_amount / ifrs9_total_exposure) * 100
+
+      # Staging distribution percentages
+      - record: ifrs9:staging_distribution_percent
+        expr: |
+          (
+            ifrs9_staging_count by (stage) /
+            sum(ifrs9_staging_count)
+          ) * 100
+
+      # Daily ECL change percentage
+      - record: ifrs9:ecl_daily_change_percent
+        expr: |
+          (
+            (ifrs9_ecl_total_amount - ifrs9_ecl_total_amount offset 1d) /
+            ifrs9_ecl_total_amount offset 1d
+          ) * 100
+
+      # Model accuracy by model type
+      - record: ifrs9:model_accuracy_avg
+        expr: |
+          avg(ifrs9_ml_model_accuracy) by (model_type)
+
+      # Data quality score trend
+      - record: ifrs9:data_quality_trend
+        expr: |
+          deriv(ifrs9_data_quality_score[10m]) * 600  # 10-minute trend
+
+  # Resource Utilization Aggregations
+  - name: ifrs9.resource.utilization
+    interval: 30s
+    rules:
+      # CPU utilization by agent
+      - record: ifrs9:cpu_utilization_by_agent
+        expr: |
+          avg(rate(process_cpu_seconds_total{job=~"ifrs9-.*"}[5m])) by (job) * 100
+
+      # Memory utilization by agent
+      - record: ifrs9:memory_utilization_by_agent
+        expr: |
+          (
+            process_resident_memory_bytes{job=~"ifrs9-.*"} /
+            node_memory_MemTotal_bytes
+          ) * 100
+
+      # Disk I/O rate by agent
+      - record: ifrs9:disk_io_rate_by_agent
+        expr: |
+          rate(process_io_read_bytes_total{job=~"ifrs9-.*"}[5m]) +
+          rate(process_io_write_bytes_total{job=~"ifrs9-.*"}[5m])
+
+      # Network traffic by agent
+      - record: ifrs9:network_traffic_by_agent
+        expr: |
+          rate(process_network_receive_bytes_total{job=~"ifrs9-.*"}[5m]) +
+          rate(process_network_transmit_bytes_total{job=~"ifrs9-.*"}[5m])
+
+  # Error Rate Aggregations
+  - name: ifrs9.error.rates
+    interval: 30s
+    rules:
+      # Error rate by agent
+      - record: ifrs9:error_rate_by_agent
+        expr: |
+          rate(ifrs9_error_count[5m])
+
+      # Error rate by severity
+      - record: ifrs9:error_rate_by_severity
+        expr: |
+          sum(rate(ifrs9_error_count[5m])) by (severity)
+
+      # Critical error rate (overall system)
+      - record: ifrs9:critical_error_rate
+        expr: |
+          sum(rate(ifrs9_error_count{severity="critical"}[5m]))
+
+      # Warning error rate trend
+      - record: ifrs9:warning_error_trend
+        expr: |
+          deriv(sum(rate(ifrs9_error_count{severity="warning"}[5m]))[10m])
+
+  # Data Processing Aggregations
+  - name: ifrs9.data.processing
+    interval: 1m
+    rules:
+      # Records processed per second by stage
+      - record: ifrs9:records_processed_per_second
+        expr: |
+          rate(ifrs9_records_processed[1m])
+
+      # Data processing throughput by agent
+      - record: ifrs9:throughput_by_agent
+        expr: |
+          sum(rate(ifrs9_records_processed[5m])) by (agent)
+
+      # Average record processing time
+      - record: ifrs9:avg_record_processing_time_seconds
+        expr: |
+          ifrs9_pipeline_duration_seconds / ifrs9_records_processed
+
+      # Data volume trend
+      - record: ifrs9:data_volume_trend
+        expr: |
+          deriv(ifrs9_records_processed[30m]) * 1800  # 30-minute trend
+
+  # SLA Compliance Aggregations
+  - name: ifrs9.sla.compliance
+    interval: 1m
+    rules:
+      # Overall SLA compliance rate
+      - record: ifrs9:sla_compliance_rate
+        expr: |
+          (
+            sum(ifrs9_sla_compliance == 1) /
+            count(ifrs9_sla_compliance)
+          ) * 100
+
+      # SLA compliance by task
+      - record: ifrs9:sla_compliance_by_task
+        expr: |
+          avg(ifrs9_sla_compliance) by (task_id) * 100
+
+      # SLA breach count in last hour
+      - record: ifrs9:sla_breaches_1h
+        expr: |
+          increase(ifrs9_sla_compliance == 0[1h])
+
+      # Time to SLA breach (predictive)
+      - record: ifrs9:time_to_sla_breach_minutes
+        expr: |
+          (9000 - ifrs9_pipeline_duration_seconds) / 60  # 150 minutes = 9000 seconds
+
+  # Integration Health Aggregations
+  - name: ifrs9.integration.health
+    interval: 30s
+    rules:
+      # BigQuery connection success rate
+      - record: ifrs9:bigquery_success_rate
+        expr: |
+          (
+            rate(ifrs9_bigquery_requests{status="success"}[5m]) /
+            rate(ifrs9_bigquery_requests[5m])
+          ) * 100
+
+      # GCS upload success rate
+      - record: ifrs9:gcs_success_rate
+        expr: |
+          (
+            rate(ifrs9_gcs_operations{operation="upload", status="success"}[5m]) /
+            rate(ifrs9_gcs_operations{operation="upload"}[5m])
+          ) * 100
+
+      # PostgreSQL connection pool efficiency
+      - record: ifrs9:postgres_pool_efficiency
+        expr: |
+          (
+            ifrs9_postgres_connection_pool_active /
+            ifrs9_postgres_connection_pool_max
+          ) * 100
+
+      # External API response time
+      - record: ifrs9:external_api_response_time_avg
+        expr: |
+          avg(ifrs9_external_api_duration_seconds) by (api_endpoint)
+
+  # Polars Performance Aggregations
+  - name: ifrs9.polars.performance
+    interval: 30s
+    rules:
+      # Polars query execution rate
+      - record: ifrs9:polars_query_rate
+        expr: |
+          rate(ifrs9_polars_queries_total[5m])
+
+      # Polars memory efficiency
+      - record: ifrs9:polars_memory_efficiency
+        expr: |
+          ifrs9_records_processed / (ifrs9_polars_memory_usage_bytes / 1024 / 1024)  # Records per MB
+
+      # Polars query performance trend
+      - record: ifrs9:polars_performance_trend
+        expr: |
+          deriv(avg(ifrs9_polars_query_duration_seconds)[10m]) * 600
+
+  # ML Model Performance Aggregations  
+  - name: ifrs9.ml.performance
+    interval: 1m
+    rules:
+      # Model prediction rate
+      - record: ifrs9:ml_prediction_rate
+        expr: |
+          rate(ifrs9_ml_predictions_total[5m])
+
+      # Model accuracy trend by type
+      - record: ifrs9:ml_accuracy_trend
+        expr: |
+          deriv(ifrs9_ml_model_accuracy[1h]) * 3600  # Hourly trend
+
+      # Model inference latency percentiles
+      - record: ifrs9:ml_inference_p95_seconds
+        expr: |
+          histogram_quantile(0.95, rate(ifrs9_ml_inference_duration_seconds_bucket[5m]))
+
+      # Model feature drift detection
+      - record: ifrs9:ml_feature_drift
+        expr: |
+          abs(ifrs9_ml_feature_distribution - ifrs9_ml_feature_distribution offset 1d)
+
+  # Audit and Compliance Aggregations
+  - name: ifrs9.audit.compliance
+    interval: 5m
+    rules:
+      # Audit trail completeness rate
+      - record: ifrs9:audit_completeness_rate
+        expr: |
+          (
+            sum(ifrs9_audit_records_complete) /
+            sum(ifrs9_audit_records_expected)
+          ) * 100
+
+      # Data lineage tracking coverage
+      - record: ifrs9:lineage_coverage
+        expr: |
+          (
+            count(ifrs9_data_lineage_tracked == 1) /
+            count(ifrs9_data_lineage_tracked)
+          ) * 100
+
+      # Regulatory compliance score
+      - record: ifrs9:regulatory_compliance_score
+        expr: |
+          (
+            sum(ifrs9_compliance_checks{status="pass"}) /
+            sum(ifrs9_compliance_checks)
+          ) * 100
+
+  # Cost Optimization Aggregations
+  - name: ifrs9.cost.optimization
+    interval: 5m
+    rules:
+      # Processing cost per record
+      - record: ifrs9:cost_per_record_usd
+        expr: |
+          (ifrs9_gcp_costs_total / ifrs9_records_processed) * 100  # Cost in cents per record
+
+      # Resource efficiency score
+      - record: ifrs9:resource_efficiency_score
+        expr: |
+          (
+            ifrs9_records_processed /
+            (ifrs9:cpu_utilization_by_agent + ifrs9:memory_utilization_by_agent)
+          ) * 100

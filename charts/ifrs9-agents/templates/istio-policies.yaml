@@ -1,0 +1,22 @@
+{{- if .Values.global.serviceMesh.enabled }}
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: ifrs9-strict-mtls
+  namespace: {{ .Values.namespace }}
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ifrs9-allow-namespace
+  namespace: {{ .Values.namespace }}
+spec:
+  rules:
+    - from:
+        - source:
+            namespaces: [{{ .Values.namespace | quote }}]
+{{- end }}

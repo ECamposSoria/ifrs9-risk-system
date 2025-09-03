@@ -1,0 +1,60 @@
+[run]
+# Source directories to include
+source = src/
+
+# Files to include in coverage
+include = src/*.py
+
+# Files to exclude from coverage  
+omit = 
+    src/__init__.py
+    tests/*
+    */site-packages/*
+    */venv/*
+    */env/*
+
+# Configuration options
+branch = True
+parallel = True
+
+[report]
+# Reporting options
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+    
+    # Don't complain about missing debug-only code:
+    def __repr__
+    if self\.debug
+    
+    # Don't complain if tests don't hit defensive assertion code:
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Don't complain if non-runnable code isn't run:
+    if 0:
+    if __name__ == .__main__.:
+    
+    # Don't complain about abstract methods, they aren't run:
+    @(abc\.)?abstractmethod
+
+# Precision for coverage percentage
+precision = 2
+
+# Show line numbers for missing coverage
+show_missing = True
+
+# Skip coverage of files with 100% coverage
+skip_covered = False
+
+# Skip empty files
+skip_empty = True
+
+[html]
+# HTML report configuration
+directory = htmlcov
+title = IFRS9 Risk System Coverage Report
+
+[xml]
+# XML report for CI/CD systems
+output = coverage.xml
