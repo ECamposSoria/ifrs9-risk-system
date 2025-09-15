@@ -1,7 +1,7 @@
 IFRS9 Kubernetes Deployment Guide
 
 Overview
-- 8 agents deployed via Helm chart `charts/ifrs9-agents`
+- Core IFRS9 processing services (Airflow, Spark, PostgreSQL, Jupyter)
 - Observability stack via Helm chart `charts/ifrs9-ops` (Prometheus Operator, Grafana, Jaeger, EFK)
 - Service mesh (Istio) enabled per-namespace for mTLS and traffic policies
 - Config and Secrets via ConfigMaps, Secrets, and optional GCP Secret Manager CSI
@@ -14,14 +14,16 @@ Prerequisites
 - ArgoCD installed for GitOps flow (optional but recommended)
 - GKE: enable Workload Identity; provision GSA and bind to KSA
 
-Build & Push Agent Images
+Build & Push Core Images
 - Use GitHub Actions pipeline `.github/workflows/ci-cd.yaml` or locally:
   - gcloud auth configure-docker
-  - docker build -t REGION-docker.pkg.dev/PROJECT/ifrs9/<agent>:tag -f docker/agents/<agent>/Dockerfile .
-  - docker push REGION-docker.pkg.dev/PROJECT/ifrs9/<agent>:tag
+  - docker build -t REGION-docker.pkg.dev/PROJECT/ifrs9/airflow:tag -f docker/airflow/Dockerfile .
+  - docker build -t REGION-docker.pkg.dev/PROJECT/ifrs9/spark:tag -f Dockerfile.ifrs9-spark .
+  - docker push REGION-docker.pkg.dev/PROJECT/ifrs9/airflow:tag
+  - docker push REGION-docker.pkg.dev/PROJECT/ifrs9/spark:tag
 
-Install Agents
-- helm upgrade --install ifrs9-agents charts/ifrs9-agents \
+Install Core Services
+- helm upgrade --install ifrs9-core charts/ifrs9-core \
     --namespace ifrs9 --create-namespace \
     --set image.registry=REGION-docker.pkg.dev/PROJECT/ifrs9 \
     --set image.tag=latest

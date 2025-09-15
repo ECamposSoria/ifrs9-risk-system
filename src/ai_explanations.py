@@ -1,8 +1,11 @@
 """
-Vertex AI Explanations Module for IFRS9 Risk System
+AI Explanations Module for IFRS9 Risk System
 
-This module provides comprehensive AI-powered explanations for IFRS9 credit risk decisions,
+This module provides AI-powered explanations for IFRS9 credit risk decisions,
 including natural language explanations, outlier detection, and SHAP-based model transparency.
+
+Supports local development mode with environment variable VERTEX_AI_ENABLED=false
+to use local ML models and rule-based explanations.
 """
 
 import os
@@ -13,11 +16,20 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
-# Google Cloud imports
-from google.cloud import aiplatform, bigquery
-from google.oauth2 import service_account
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
+# Check if Vertex AI should be enabled
+VERTEX_AI_ENABLED = os.getenv('VERTEX_AI_ENABLED', 'false').lower() == 'true'
+AI_EXPLANATIONS_ENABLED = os.getenv('AI_EXPLANATIONS_ENABLED', 'false').lower() == 'true'
+
+# Google Cloud imports only when enabled
+if VERTEX_AI_ENABLED:
+    try:
+        from google.cloud import aiplatform, bigquery
+        from google.oauth2 import service_account
+        import vertexai
+        from vertexai.generative_models import GenerativeModel, GenerationConfig
+    except ImportError as e:
+        logging.warning(f"Vertex AI dependencies not available: {e}. Using local alternatives.")
+        VERTEX_AI_ENABLED = False
 
 # ML and explanation imports
 import shap
@@ -29,43 +41,157 @@ from sklearn.cluster import IsolationForest
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class VertexAIExplanationEngine:
-    """Main class for AI-powered IFRS9 explanations using Vertex AI"""
-    
+class IFRS9ExplanationEngine:
+    """Main class for IFRS9 explanations with Vertex AI and local fallback support"""
+
     def __init__(self,
-                 project_id: str,
+                 project_id: Optional[str] = None,
                  location: str = "us-central1",
                  pd_endpoint_id: Optional[str] = None,
                  anomaly_endpoint_id: Optional[str] = None,
                  credentials_path: Optional[str] = None):
         """
-        Initialize Vertex AI Explanation Engine
-        
+        Initialize IFRS9 Explanation Engine with local/cloud modes
+
         Args:
-            project_id: GCP project ID
+            project_id: GCP project ID (required only if VERTEX_AI_ENABLED=true)
             location: Vertex AI location
             pd_endpoint_id: Probability of Default model endpoint ID
             anomaly_endpoint_id: Anomaly detection model endpoint ID
             credentials_path: Path to service account credentials
         """
-        self.project_id = project_id
-        self.location = location
-        self.pd_endpoint_id = pd_endpoint_id
-        self.anomaly_endpoint_id = anomaly_endpoint_id
-        
-        # Initialize credentials
-        self.credentials = self._load_credentials(credentials_path)
-        
-        # Initialize clients
-        self._init_clients()
-        
-        # Initialize Vertex AI
-        vertexai.init(project=project_id, location=location, credentials=self.credentials)
-        
-        # Initialize Gemini model for NLG
-        self.gemini_model = GenerativeModel("gemini-1.5-pro-002")
-        
-        logger.info(f"Vertex AI Explanation Engine initialized for project: {project_id}")
+        self.vertex_ai_enabled = VERTEX_AI_ENABLED
+        self.explanations_enabled = AI_EXPLANATIONS_ENABLED
+
+        if self.vertex_ai_enabled:
+            if not project_id:
+                raise ValueError("project_id is required when VERTEX_AI_ENABLED=true")
+
+            self.project_id = project_id
+            self.location = location
+            self.pd_endpoint_id = pd_endpoint_id
+            self.anomaly_endpoint_id = anomaly_endpoint_id
+
+            # Initialize credentials
+            self.credentials = self._load_credentials(credentials_path)
+
+            # Initialize clients
+            self._init_clients()
+
+            # Initialize Vertex AI
+            vertexai.init(project=project_id, location=location, credentials=self.credentials)
+
+            # Initialize Gemini model for NLG
+            self.gemini_model = GenerativeModel("gemini-1.5-pro-002")
+
+            logger.info(f"Vertex AI Explanation Engine initialized for project: {project_id}")
+        else:
+            logger.info("AI explanations using local rule-based system")
+            # Local rule-based explanation system
+            self._init_local_explainer()
+
+    def _init_local_explainer(self):
+        """Initialize local rule-based explanation system"""
+        self.explanation_templates = {
+            "STAGE_1": "Loan classified as Stage 1 (Performing) due to: {reasons}",
+            "STAGE_2": "Loan moved to Stage 2 (Underperforming) due to: {reasons}",
+            "STAGE_3": "Loan classified as Stage 3 (Non-performing) due to: {reasons}"
+        }
+
+        self.risk_factors = {
+            "high_dpd": "Days past due exceeds threshold",
+            "credit_score_decline": "Significant credit score deterioration",
+            "payment_history": "Poor payment history pattern",
+            "economic_stress": "Economic stress indicators present",
+            "collateral_decline": "Collateral value depreciation"
+        }
+
+    def explain_loan_decision(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate explanation for loan staging decision
+
+        Args:
+            loan_data: Dictionary containing loan information
+
+        Returns:
+            Dict containing explanation details
+        """
+        if self.vertex_ai_enabled and self.explanations_enabled:
+            return self._generate_ai_explanation(loan_data)
+        else:
+            return self._generate_rule_based_explanation(loan_data)
+
+    def _generate_ai_explanation(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate AI-powered explanation using Vertex AI"""
+        try:
+            # This would use the Gemini model for natural language generation
+            prompt = self._build_explanation_prompt(loan_data)
+            response = self.gemini_model.generate_content(prompt)
+
+            return {
+                "explanation_type": "ai_generated",
+                "explanation": response.text,
+                "confidence": 0.85,  # Mock confidence score
+                "data_sources": ["credit_bureau", "payment_history", "economic_indicators"]
+            }
+
+        except Exception as e:
+            logger.error(f"AI explanation failed: {str(e)}. Falling back to rule-based.")
+            return self._generate_rule_based_explanation(loan_data)
+
+    def _generate_rule_based_explanation(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate rule-based explanation using local logic"""
+        stage = loan_data.get("calculated_stage", "STAGE_1")
+        reasons = []
+
+        # Simple rule-based logic
+        if loan_data.get("days_past_due", 0) > 30:
+            reasons.append(self.risk_factors["high_dpd"])
+
+        if loan_data.get("credit_score", 750) < 600:
+            reasons.append(self.risk_factors["credit_score_decline"])
+
+        # Default reasons if none identified
+        if not reasons:
+            if stage == "STAGE_1":
+                reasons = ["No significant credit risk indicators detected"]
+            else:
+                reasons = ["Credit risk assessment triggered staging change"]
+
+        explanation = self.explanation_templates[stage].format(
+            reasons=", ".join(reasons)
+        )
+
+        return {
+            "explanation_type": "rule_based",
+            "explanation": explanation,
+            "confidence": 0.75,
+            "risk_factors": reasons,
+            "stage": stage
+        }
+
+    def _build_explanation_prompt(self, loan_data: Dict[str, Any]) -> str:
+        """Build prompt for AI explanation generation"""
+        return f"""
+        Explain why this loan is classified as {loan_data.get('calculated_stage', 'STAGE_1')}:
+
+        Loan Details:
+        - Credit Score: {loan_data.get('credit_score', 'N/A')}
+        - Days Past Due: {loan_data.get('days_past_due', 0)}
+        - Loan Amount: {loan_data.get('loan_amount', 'N/A')}
+        - Current Balance: {loan_data.get('current_balance', 'N/A')}
+
+        Please provide a clear, professional explanation suitable for regulatory reporting.
+        """
+
+    def get_system_info(self) -> Dict[str, Any]:
+        """Get information about the explanation system configuration"""
+        return {
+            "vertex_ai_enabled": self.vertex_ai_enabled,
+            "explanations_enabled": self.explanations_enabled,
+            "explanation_mode": "ai_powered" if self.vertex_ai_enabled else "rule_based",
+            "project_id": getattr(self, 'project_id', None)
+        }
     
     def _load_credentials(self, credentials_path: Optional[str]) -> Optional[service_account.Credentials]:
         """Load service account credentials"""

@@ -25,7 +25,7 @@ class TestIFRS9RulesEngine:
     def test_staging_classification(self, spark_session, sample_spark_df, datetime_converter):
         """Test IFRS9 stage classification logic."""
         engine = IFRS9RulesEngine(spark=spark_session)
-        result_df = engine._apply_staging_rules(sample_spark_df)
+        result_df = engine._apply_enhanced_staging_rules(sample_spark_df)
         result_pd = datetime_converter.spark_to_pandas_safe(result_df)
         
         # Check stage assignments
@@ -46,8 +46,8 @@ class TestIFRS9RulesEngine:
     def test_pd_calculation(self, spark_session, sample_spark_df, datetime_converter):
         """Test Probability of Default calculation."""
         engine = IFRS9RulesEngine(spark=spark_session)
-        staged_df = engine._apply_staging_rules(sample_spark_df)
-        result_df = engine._calculate_risk_parameters(staged_df)
+        staged_df = engine._apply_enhanced_staging_rules(sample_spark_df)
+        result_df = engine._calculate_enhanced_risk_parameters(staged_df)
         result_pd = datetime_converter.spark_to_pandas_safe(result_df)
         
         pd_values = result_pd.set_index("loan_id")["calculated_pd"].to_dict()
@@ -65,8 +65,8 @@ class TestIFRS9RulesEngine:
     def test_lgd_calculation(self, spark_session, sample_spark_df, datetime_converter):
         """Test Loss Given Default calculation."""
         engine = IFRS9RulesEngine(spark=spark_session)
-        staged_df = engine._apply_staging_rules(sample_spark_df)
-        result_df = engine._calculate_risk_parameters(staged_df)
+        staged_df = engine._apply_enhanced_staging_rules(sample_spark_df)
+        result_df = engine._calculate_enhanced_risk_parameters(staged_df)
         result_pd = datetime_converter.spark_to_pandas_safe(result_df)
         
         lgd_values = result_pd.set_index("loan_id")["calculated_lgd"].to_dict()

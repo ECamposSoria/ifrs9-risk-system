@@ -1,7 +1,0 @@
-apiVersion: v2
-name: ifrs9-agents
-description: IFRS9 specialized agents (8 microservices) with HPA, ConfigMaps, Secrets, and mesh annotations
-type: application
-version: 0.1.0
-appVersion: "1.0.0"
-

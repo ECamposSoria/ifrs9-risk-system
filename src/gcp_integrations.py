@@ -3,50 +3,136 @@ GCP Integration Module for IFRS9 Risk System
 
 This module provides comprehensive integration with Google Cloud Platform services
 including BigQuery, Cloud Storage, Dataproc, and authentication management.
+
+Supports local development mode with environment variable GCP_ENABLED=false
+to use local alternatives (PostgreSQL, file system, etc.)
 """
 
 import os
 import json
 import logging
+import sqlite3
 from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
 
-from google.cloud import bigquery, storage, dataproc_v1
-from google.cloud.exceptions import NotFound, Conflict
-from google.oauth2 import service_account
-from google.api_core import retry
-import pyarrow as pa
-import pyarrow.parquet as pq
+# GCP imports only when enabled
+GCP_ENABLED = os.getenv('GCP_ENABLED', 'false').lower() == 'true'
+
+if GCP_ENABLED:
+    try:
+        from google.cloud import bigquery, storage, dataproc_v1
+        from google.cloud.exceptions import NotFound, Conflict
+        from google.oauth2 import service_account
+        from google.api_core import retry
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as e:
+        logger.warning(f"GCP dependencies not available: {e}. Using local fallbacks.")
+        GCP_ENABLED = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class GCPIntegration:
-    """Main class for GCP service integrations"""
-    
-    def __init__(self, 
-                 project_id: str,
+    """Main class for GCP service integrations with local fallback support"""
+
+    def __init__(self,
+                 project_id: Optional[str] = None,
                  credentials_path: Optional[str] = None,
                  location: str = "us-central1"):
         """
-        Initialize GCP Integration
-        
+        Initialize GCP Integration with local fallback
+
         Args:
-            project_id: GCP project ID
+            project_id: GCP project ID (required only if GCP_ENABLED=true)
             credentials_path: Path to service account JSON file
             location: GCP region for resources
         """
+        self.gcp_enabled = GCP_ENABLED
         self.project_id = project_id
         self.location = location
-        self.credentials = self._load_credentials(credentials_path)
-        
-        # Initialize clients
-        self.bigquery_client = None
-        self.storage_client = None
-        self.dataproc_client = None
+
+        if self.gcp_enabled:
+            if not project_id:
+                raise ValueError("project_id is required when GCP_ENABLED=true")
+            self.credentials = self._load_credentials(credentials_path)
+
+            # Initialize GCP clients
+            self.bigquery_client = None
+            self.storage_client = None
+            self.dataproc_client = None
+        else:
+            logger.info("GCP integration disabled. Using local alternatives.")
+            # Local fallback configuration
+            self.local_db_path = os.getenv('LOCAL_DB_PATH', '/tmp/ifrs9_local.db')
+            self.local_storage_path = Path(os.getenv('LOCAL_STORAGE_PATH', './data/local_storage'))
+            self.local_storage_path.mkdir(parents=True, exist_ok=True)
+
+    def upload_dataframe_to_storage(self, df: pd.DataFrame, table_name: str) -> bool:
+        """
+        Upload DataFrame to storage - BigQuery if GCP enabled, else local storage
+
+        Args:
+            df: DataFrame to upload
+            table_name: Table/file name
+
+        Returns:
+            bool: Success status
+        """
+        if self.gcp_enabled:
+            return self._upload_to_bigquery(df, table_name)
+        else:
+            return self._save_to_local_storage(df, table_name)
+
+    def _upload_to_bigquery(self, df: pd.DataFrame, table_name: str) -> bool:
+        """Upload DataFrame to BigQuery"""
+        try:
+            if not self.bigquery_client:
+                self.bigquery_client = bigquery.Client(
+                    project=self.project_id,
+                    credentials=self.credentials
+                )
+
+            table_id = f"{self.project_id}.ifrs9_data.{table_name}"
+            job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+
+            job = self.bigquery_client.load_table_from_dataframe(
+                df, table_id, job_config=job_config
+            )
+            job.result()  # Wait for job to complete
+
+            logger.info(f"Successfully uploaded {len(df)} rows to {table_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to upload to BigQuery: {str(e)}")
+            return False
+
+    def _save_to_local_storage(self, df: pd.DataFrame, table_name: str) -> bool:
+        """Save DataFrame to local storage (Parquet format)"""
+        try:
+            file_path = self.local_storage_path / f"{table_name}.parquet"
+            df.to_parquet(file_path, index=False)
+
+            logger.info(f"Successfully saved {len(df)} rows to {file_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save to local storage: {str(e)}")
+            return False
+
+    def get_environment_info(self) -> Dict[str, Any]:
+        """Get current environment configuration info"""
+        return {
+            "gcp_enabled": self.gcp_enabled,
+            "project_id": self.project_id if self.gcp_enabled else None,
+            "location": self.location if self.gcp_enabled else None,
+            "local_db_path": self.local_db_path if not self.gcp_enabled else None,
+            "local_storage_path": str(self.local_storage_path) if not self.gcp_enabled else None
+        }
         
         # Environment detection
         self.is_local = self._detect_environment()

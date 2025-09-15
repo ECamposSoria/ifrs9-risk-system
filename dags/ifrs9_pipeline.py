@@ -1,21 +1,21 @@
-"""Enhanced IFRS9 Orchestration DAG.
+"""Enhanced IFRS9 Processing DAG.
 
 This DAG provides comprehensive orchestration for the IFRS9 credit risk pipeline with:
 - Advanced monitoring and SLA tracking
-- Inter-agent coordination and communication
+- Direct task coordination and communication
 - Comprehensive error recovery and rollback procedures
 - Real-time performance metrics and alerting
 - Intelligent retry logic with exponential backoff
 - Circuit breaker patterns for system protection
 - Complete audit trail and compliance reporting
 
-Agent Coordination:
-- ifrs9-validator: Data quality gates and validation
-- ifrs9-rules-engine: ML-enhanced IFRS9 calculations  
-- ifrs9-ml-models: Advanced ML pipeline with model selection
-- ifrs9-integrator: External system integration
-- ifrs9-reporter: Business-ready reports and dashboards
-- ifrs9-debugger: Automated escalation for complex failures
+Core Processing Tasks:
+- Data generation: Synthetic data creation and preparation
+- Data validation: Quality gates and business rule validation
+- IFRS9 processing: ML-enhanced IFRS9 calculations
+- ML training: Advanced ML pipeline with model selection
+- Data integration: External system integration (GCP/local)
+- Report generation: Business-ready reports and dashboards
 """
 
 from datetime import datetime, timedelta
@@ -64,7 +64,7 @@ except FileNotFoundError:
 
 # Enhanced default arguments with orchestration settings
 default_args = {
-    "owner": "ifrs9-orchestrator",
+    "owner": "ifrs9-system",
     "depends_on_past": False,
     "start_date": datetime(2024, 1, 1),
     "email": ["admin@example.com", "ifrs9-team@example.com", "risk-management@example.com"],
@@ -141,7 +141,7 @@ def load_orchestration_state(**context) -> Dict[str, Any]:
     }
 
 def save_orchestration_state(context: dict, state: Dict[str, Any]) -> None:
-    """Save orchestration state to XCom for inter-agent communication."""
+    """Save orchestration state to XCom for inter-task communication."""
     ti = context['ti']
     for key, value in state.items():
         ti.xcom_push(key=key, value=value)
@@ -186,10 +186,10 @@ def handle_task_success(context: dict) -> None:
         'duration_seconds': (task_instance.end_date - task_instance.start_date).total_seconds()
     }
     
-    # Update agent status
-    agent_status = state.get('agent_status', {})
-    agent_status[task_instance.task_id] = 'completed'
-    state['agent_status'] = agent_status
+    # Update task status
+    task_status = state.get('task_status', {})
+    task_status[task_instance.task_id] = 'completed'
+    state['task_status'] = task_status
     
     save_orchestration_state(context, state)
 
@@ -206,7 +206,7 @@ def handle_task_retry(context: dict) -> None:
     save_orchestration_state(context, state)
 
 def escalate_to_debugger(context: dict, state: Dict[str, Any]) -> None:
-    """Escalate complex failures to ifrs9-debugger agent."""
+    """Escalate complex failures to debugging system."""
     task_instance = context['task_instance']
     
     escalation_payload = {
@@ -278,7 +278,7 @@ def initialize_pipeline_orchestration(**context):
     initial_state = {
         'pipeline_start_time': datetime.now().isoformat(),
         'current_stage': 'initialization',
-        'agent_status': {},
+        'task_status': {},
         'error_count': 0,
         'performance_metrics': {},
         'sla_status': 'on_track',
@@ -340,7 +340,7 @@ def generate_synthetic_data(**context):
     # Update orchestration state
     state = load_orchestration_state(**context)
     state['current_stage'] = 'data_generation'
-    state['agent_status']['ifrs9-data-generator'] = 'active'
+    state['task_status']['data_generation'] = 'active'
     save_orchestration_state(context, state)
     
     try:
@@ -360,7 +360,7 @@ def generate_synthetic_data(**context):
             'processing_time_seconds': time.time() - start_time,
             'records_generated': result.get('total_records', 0) if isinstance(result, dict) else 0,
             'data_quality_score': 100.0,  # Synthetic data should be perfect
-            'agent_version': 'ifrs9-data-generator-v1.0',
+            'task_version': 'data-generator-v1.0',
             'generation_parameters': {
                 'seed': 42,
                 'output_format': 'csv',
@@ -369,12 +369,12 @@ def generate_synthetic_data(**context):
             }
         }
         
-        # Push metadata to XCom for inter-agent communication
+        # Push metadata to XCom for inter-task communication
         for key, value in generation_metadata.items():
             ti.xcom_push(key=key, value=value)
         
         # Update orchestration state
-        state['agent_status']['ifrs9-data-generator'] = 'completed'
+        state['task_status']['data_generation'] = 'completed'
         state['performance_metrics']['data_generation'] = generation_metadata
         save_orchestration_state(context, state)
         

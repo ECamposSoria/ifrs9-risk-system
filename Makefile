@@ -1,4 +1,4 @@
-.PHONY: help setup up down restart logs clean test lint format build push deploy init-airflow show-ports monitoring-up monitoring-down loadtest-up loadtest-down analyze-codebase agents-readiness
+.PHONY: help setup up down restart logs clean test lint format build push deploy init-airflow show-ports monitoring-up monitoring-down loadtest-up loadtest-down analyze-codebase
 
 # Variables
 DOCKER_COMPOSE = docker-compose -f docker-compose.ifrs9.yml
@@ -89,9 +89,12 @@ analyze-codebase: ## Run offline codebase analysis (optional Gemini enrichment w
 	$(PYTHON) src/analysis/gemini_codebase_analyzer.py --root . --out reports/codebase_analysis_report.json
 	@echo "$(GREEN)Report: reports/codebase_analysis_report.json$(NC)"
 
-agents-readiness: ## Probe all IFRS9 agent health endpoints and summarize
-	@echo "$(GREEN)Checking agents readiness...$(NC)"
-	$(PYTHON) scripts/agents_readiness.py
+system-health: ## Check system health and service readiness
+	@echo "$(GREEN)Checking system health...$(NC)"
+	@$(DOCKER_COMPOSE) ps
+	@echo "$(GREEN)Checking service endpoints...$(NC)"
+	@curl -f http://localhost:8080/health 2>/dev/null && echo "✓ Airflow webserver healthy" || echo "✗ Airflow webserver not responding"
+	@curl -f http://localhost:8090 2>/dev/null && echo "✓ Spark master UI accessible" || echo "✗ Spark master UI not accessible"
 
 ps: ## Show running containers
 	@$(DOCKER_COMPOSE) ps
