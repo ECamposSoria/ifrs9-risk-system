@@ -79,6 +79,13 @@ RUN pip install --no-cache-dir \
     pytest-cov==4.1.0 \
     pytest-xdist==3.3.1
 
+# Install production validation and data generation dependencies
+RUN pip install --no-cache-dir \
+    faker \
+    great-expectations \
+    psutil \
+    seaborn
+
 # Copy application code
 COPY src/ /app/src/
 COPY dags/ /app/dags/
@@ -116,7 +123,6 @@ ENV SPARK_MASTER_WEBUI_PORT=8080
 
 # Enhanced PyArrow and datetime configuration for IFRS9
 ENV PYARROW_IGNORE_TIMEZONE=1
-ENV ARROW_PRE_0_15_IPC_FORMAT=1
 ENV SPARK_CONF_DIR=/opt/spark/conf
 ENV PYSPARK_PYTHON=python3
 
@@ -150,7 +156,6 @@ set -e
 
 # IFRS9 Enhanced Datetime Environment Setup
 export PYARROW_IGNORE_TIMEZONE=1
-export ARROW_PRE_0_15_IPC_FORMAT=1
 export TZ=UTC
 export LC_TIME=C.UTF-8
 

@@ -13,7 +13,7 @@ from typing import Dict
 
 import pytest
 
-from .conftest import docker_exec_python
+from tests.docker.conftest import docker_exec_python
 
 
 def test_cross_container_parquet_sharing(docker_containers, polars_env):

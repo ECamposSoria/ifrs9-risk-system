@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 # Configure PyArrow for enhanced datetime compatibility
 os.environ.setdefault('PYARROW_IGNORE_TIMEZONE', '1')
-os.environ.setdefault('ARROW_PRE_0_15_IPC_FORMAT', '1')
 
 # Suppress PyArrow timezone warnings for clean conversion
 warnings.filterwarnings('ignore', category=UserWarning, module='pyarrow')

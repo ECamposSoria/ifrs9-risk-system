@@ -6,6 +6,11 @@ for the IFRS9 credit risk analysis pipeline.
 
 from typing import Any, Dict, List, Optional, Tuple
 
+import os
+
+# Ensure legacy Arrow compatibility flag does not break PySpark integrations
+os.environ.pop("ARROW_PRE_0_15_IPC_FORMAT", None)
+
 import great_expectations as ge
 import pandas as pd
 import pandera as pa

@@ -5,6 +5,8 @@ focusing on optimal PySpark session management and test isolation.
 """
 
 import os
+import sys
+import os
 import pytest
 import pandas as pd
 from datetime import datetime, timedelta
@@ -13,10 +15,8 @@ from typing import Generator, Dict, Any
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
-# Import datetime converter from Phase 2
-import sys
-sys.path.append('/home/eze/projects/ifrs9-risk-system/validation')
-from datetime_converter import DateTimeConverter
+# Import datetime converter from validation directory
+from validation.datetime_converter import DateTimeConverter
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +29,7 @@ def spark_config() -> Dict[str, str]:
         "spark.sql.adaptive.enabled": "true",
         "spark.sql.adaptive.coalescePartitions.enabled": "true",
         "spark.sql.warehouse.dir": "/tmp/spark-warehouse",
-        "spark.sql.execution.arrow.pyspark.enabled": "true",  # Enable Arrow for better Pandas integration
+        "spark.sql.execution.arrow.pyspark.enabled": "false",
         "spark.serializer": "org.apache.spark.serializer.KryoSerializer",
         "spark.sql.adaptive.localShuffleReader.enabled": "true"
     }

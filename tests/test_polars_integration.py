@@ -296,9 +296,9 @@ class TestPolarsIFRS9Specific:
                      (pl.col('balance') * pl.col('interest_rate') / 12)
                      .alias('monthly_payment_approx'),
                      # Risk buckets
-                     pl.when(pl.col('ltv') > 0.8).then('High Risk')
-                     .when(pl.col('ltv') > 0.6).then('Medium Risk')
-                     .otherwise('Low Risk')
+                     pl.when(pl.col('ltv') > 0.8).then(pl.lit('High Risk'))
+                     .when(pl.col('ltv') > 0.6).then(pl.lit('Medium Risk'))
+                     .otherwise(pl.lit('Low Risk'))
                      .alias('risk_bucket')
                  ])
                  .filter(pl.col('balance') > 1000)  # Filter small loans

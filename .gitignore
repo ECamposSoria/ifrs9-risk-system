@@ -118,7 +118,8 @@ site/
 # Output files
 outputs/
 results/
-reports/
+reports/*
+!reports/.gitkeep
 *.csv
 *.xlsx
 *.parquet

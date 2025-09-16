@@ -18,9 +18,12 @@ x-airflow-common:
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
+    - ./reports:/opt/airflow/reports
     - ./plugins:/opt/airflow/plugins
     - ./data:/opt/airflow/data
     - ./src:/opt/airflow/src
+    - ./validation:/app/validation
+    - ./scripts:/app/scripts
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -60,9 +63,13 @@ services:
       - "${SPARK_MASTER_UI_PORT:-0}:8080"
     volumes:
       - ./data:/data
+      - ./reports:/app/reports
+      - ./config:/app/config
       - ./src:/app/src
       - ./notebooks:/notebooks
       - ./tests:/app/tests
+      - ./validation:/app/validation
+      - ./scripts:/app/scripts
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
@@ -90,8 +97,12 @@ services:
       - "${SPARK_WORKER_UI_PORT:-0}:8081"
     volumes:
       - ./data:/data
+      - ./reports:/app/reports
+      - ./config:/app/config
       - ./src:/app/src
       - ./tests:/app/tests
+      - ./validation:/app/validation
+      - ./scripts:/app/scripts
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081"]
       interval: 10s
@@ -115,8 +126,12 @@ services:
     volumes:
       - ./notebooks:/home/jovyan/notebooks
       - ./data:/home/jovyan/data
+      - ./reports:/home/jovyan/reports
+      - ./config:/home/jovyan/config
       - ./src:/home/jovyan/src
       - ./tests:/home/jovyan/tests
+      - ./validation:/app/validation
+      - ./scripts:/app/scripts
     command: start-notebook.sh --NotebookApp.token='${JUPYTER_TOKEN:-ifrs9}'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/api"]

@@ -32,23 +32,34 @@ def _run(cmd: List[str], timeout: int = 120) -> Tuple[int, str, str]:
     return p.returncode, p.stdout.decode(), p.stderr.decode()
 
 
-def _compose_cmd() -> List[str]:
+def _compose_cmd() -> List[str] | None:
     # Prefer modern docker compose
     try:
         if subprocess.run(["docker", "compose", "version"], capture_output=True).returncode == 0:
             return ["docker", "compose"]
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         pass
-    return ["docker-compose"]
+
+    try:
+        if subprocess.run(["docker-compose", "version"], capture_output=True).returncode == 0:
+            return ["docker-compose"]
+    except (FileNotFoundError, OSError):
+        pass
+
+    return None
 
 
 def _compose_ps_json() -> List[dict]:
-    rc, out, _ = _run(_compose_cmd() + ["ps", "--format", "json"], timeout=30)
-    if rc != 0 or not out.strip():
-        return []
+    compose_cmd = _compose_cmd()
+    if compose_cmd is None:
+        return []  # Docker not available
+
     try:
+        rc, out, _ = _run(compose_cmd + ["ps", "--format", "json"], timeout=30)
+        if rc != 0 or not out.strip():
+            return []
         return json.loads(out)
-    except Exception:
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
         return []
 
 
@@ -60,6 +71,10 @@ def _container_running(name: str) -> bool:
 
 
 def docker_exec_python(container: str, code: str, env: Dict[str, str] | None = None, timeout: int = 300):
+    # Check if Docker is available
+    if _compose_cmd() is None:
+        raise RuntimeError("Docker not available - cannot execute container commands")
+
     env_parts: List[str] = []
     if env:
         for k, v in env.items():
@@ -70,6 +85,10 @@ def docker_exec_python(container: str, code: str, env: Dict[str, str] | None = N
 
 @pytest.fixture(scope="session")
 def docker_containers() -> List[str]:
+    # Check if Docker is available at all
+    if _compose_cmd() is None:
+        pytest.skip("Docker or docker-compose not available - skipping Docker tests")
+
     # Allow override via ENV
     override = os.getenv("DOCKER_TEST_CONTAINERS")
     if override:

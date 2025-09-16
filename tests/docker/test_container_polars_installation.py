@@ -12,7 +12,7 @@ from typing import Dict
 
 import pytest
 
-from .conftest import docker_exec_python
+from tests.docker.conftest import docker_exec_python
 
 
 def _polars_info_code() -> str:

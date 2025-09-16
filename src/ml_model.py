@@ -69,31 +69,84 @@ class CreditRiskClassifier:
             "customer_income",
             "ltv_ratio",
         ]
-        
+
         # Create derived features
         df_features = df.copy()
-        
+
+        # Provide sensible defaults for optional columns so synthetic fixtures work out of the box
+        if "customer_income" not in df_features.columns:
+            loan_amount_series = df_features.get(
+                "loan_amount", pd.Series(0, index=df_features.index, dtype=float)
+            )
+            median_amount = loan_amount_series.median()
+            if pd.isna(median_amount):
+                median_amount = 0.0
+            fallback_income = loan_amount_series.abs().fillna(median_amount) * 1.5
+            if fallback_income.replace(0, np.nan).isna().all():
+                fallback_income = pd.Series(60000.0, index=df_features.index)
+            df_features["customer_income"] = fallback_income.clip(lower=30000.0)
+        else:
+            df_features["customer_income"] = df_features["customer_income"].fillna(
+                df_features["customer_income"].median()
+            )
+
+        if "monthly_payment" not in df_features.columns:
+            loan_amount_series = df_features.get(
+                "loan_amount", pd.Series(0, index=df_features.index, dtype=float)
+            ).fillna(0)
+            term_series = df_features.get(
+                "term_months", pd.Series(36, index=df_features.index, dtype=float)
+            ).replace(0, np.nan).fillna(36)
+            interest_series = df_features.get(
+                "interest_rate", pd.Series(0.05, index=df_features.index, dtype=float)
+            ).fillna(0.05)
+            estimated_payment = (loan_amount_series / term_series) * (1 + interest_series / 12)
+            median_payment = estimated_payment.replace([np.inf, -np.inf], np.nan).median()
+            if np.isnan(median_payment):
+                median_amount = loan_amount_series.median()
+                if pd.isna(median_amount):
+                    median_amount = 0.0
+                median_term = term_series.median()
+                if pd.isna(median_term) or median_term <= 0:
+                    median_term = 36.0
+                median_payment = max(median_amount / median_term, 0)
+            df_features["monthly_payment"] = estimated_payment.fillna(median_payment)
+        else:
+            df_features["monthly_payment"] = df_features["monthly_payment"].fillna(
+                df_features["monthly_payment"].median()
+            )
+
+        if "employment_status" not in df_features.columns:
+            df_features["employment_status"] = "UNKNOWN"
+        else:
+            df_features["employment_status"] = df_features["employment_status"].fillna("UNKNOWN").astype(str)
+
+        if "loan_type" not in df_features.columns:
+            df_features["loan_type"] = "UNKNOWN"
+        else:
+            df_features["loan_type"] = df_features["loan_type"].fillna("UNKNOWN").astype(str)
+
         # Debt-to-income ratio
         df_features["debt_to_income"] = (
-            df_features["loan_amount"] / df_features["customer_income"]
+            df_features["loan_amount"] / df_features["customer_income"].replace({0: np.nan})
         )
-        
-        # Payment burden
+
+        # Payment burden (annualized)
         df_features["payment_burden"] = (
-            df_features["monthly_payment"] / df_features["customer_income"] * 12
+            df_features["monthly_payment"] / df_features["customer_income"].replace({0: np.nan}) * 12
         )
-        
+
         # Loan age (simplified as random for synthetic data)
         df_features["loan_age_months"] = np.random.randint(0, 60, len(df))
-        
+
         # Utilization rate (for credit cards)
         df_features["utilization_rate"] = (
             df_features["current_balance"] / df_features["loan_amount"]
         )
         
         # Add categorical features as dummies
-        loan_type_dummies = pd.get_dummies(df["loan_type"], prefix="loan_type")
-        employment_dummies = pd.get_dummies(df["employment_status"], prefix="employment")
+        loan_type_dummies = pd.get_dummies(df_features["loan_type"], prefix="loan_type")
+        employment_dummies = pd.get_dummies(df_features["employment_status"], prefix="employment")
         
         # Combine features
         feature_cols.extend(["debt_to_income", "payment_burden", "loan_age_months", "utilization_rate"])
@@ -103,12 +156,13 @@ class CreditRiskClassifier:
             loan_type_dummies,
             employment_dummies
         ], axis=1)
-        
+
         # Handle missing values
+        X = X.replace([np.inf, -np.inf], np.nan)
         X = X.fillna(X.median())
-        
+
         self.feature_columns = X.columns.tolist()
-        
+
         return X, self.feature_columns
     
     def train_stage_classifier(

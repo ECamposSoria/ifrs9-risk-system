@@ -17,7 +17,7 @@ from typing import Dict
 
 import pytest
 
-from .conftest import docker_exec_python
+from tests.docker.conftest import docker_exec_python
 
 
 def test_polars_healthcheck_script_all_containers(docker_containers, polars_env):

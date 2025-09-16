@@ -18,6 +18,7 @@ class TestBasicSparkFunctionality(unittest.TestCase):
             .appName("TestBasicSpark") \
             .master("local[*]") \
             .config("spark.sql.shuffle.partitions", "2") \
+            .config("spark.sql.execution.arrow.pyspark.enabled", "false") \
             .getOrCreate()
     
     @classmethod
@@ -28,7 +29,7 @@ class TestBasicSparkFunctionality(unittest.TestCase):
     def test_spark_session_creation(self):
         """Test that Spark session can be created."""
         self.assertIsNotNone(self.spark)
-        self.assertEqual(self.spark.version, "3.4.1")
+        self.assertEqual(self.spark.version, "3.5.4")
     
     def test_dataframe_creation(self):
         """Test basic DataFrame operations."""
@@ -57,7 +58,7 @@ class TestBasicSparkFunctionality(unittest.TestCase):
         result = self.spark.sql("SELECT department, COUNT(*) as count FROM employees GROUP BY department").collect()
         
         self.assertEqual(len(result), 2)
-        dept_counts = {row.department: row.count for row in result}
+        dept_counts = {row.department: row["count"] for row in result}
         self.assertEqual(dept_counts["Engineering"], 2)
         self.assertEqual(dept_counts["Marketing"], 1)
 

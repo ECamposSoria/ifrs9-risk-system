@@ -17,8 +17,8 @@ import polars as pl
 from sklearn.metrics import accuracy_score, roc_auc_score, mean_absolute_error
 
 # Import our enhanced ML components
-from enhanced_ml_models import OptimizedMLPipeline, AdvancedFeatureEngineer
-from polars_ml_integration import PolarsEnhancedCreditRiskClassifier, create_synthetic_ifrs9_data_polars
+from src.enhanced_ml_models import OptimizedMLPipeline, AdvancedFeatureEngineer
+from src.polars_ml_integration import PolarsEnhancedCreditRiskClassifier, create_synthetic_ifrs9_data_polars
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class PolarsMLBenchmarkSuite:
                 'iterations': iterations
             }
             
-            logger.info(f"Size {size}: Polars {polars_avg:.3f}s, Pandas {pandas_avg:.3f}s, Speedup: {speedup:.2f}x")
+            logger.info(f"Size {size}: Polars {polars_avg:.3f}s, Pandas {pandas_avg:.3f}s, Speedup: {speedup:.1f}x")
         
         return results
     
@@ -163,7 +163,7 @@ class PolarsMLBenchmarkSuite:
                     'accuracy_difference': abs(polars_metrics.get('accuracy', 0) - pandas_accuracy)
                 }
                 
-                logger.info(f"{model_type} Size {size}: Polars {polars_time:.3f}s, Pandas {pandas_time:.3f}s, Speedup: {speedup:.2f}x")
+                logger.info(f"{model_type} Size {size}: Polars {polars_time:.3f}s, Pandas {pandas_time:.3f}s, Speedup: {speedup:.1f}x")
         
         return results
     
@@ -214,9 +214,9 @@ class PolarsMLBenchmarkSuite:
                 ) if 'predictions' in polars_pred_results and 'predictions' in pandas_pred_results else False
             }
             
-            logger.info(f"Size {size}: Polars {polars_time:.3f}s, Pandas {pandas_time:.3f}s, Speedup: {speedup:.2f}x")
+            logger.info(f"Size {size}: Polars {polars_time:.3f}s, Pandas {pandas_time:.3f}s, Speedup: {speedup:.1f}x")
             if streaming_time:
-                logger.info(f"  Streaming: {streaming_time:.3f}s, Streaming speedup: {streaming_speedup:.2f}x")
+                logger.info(f"  Streaming: {streaming_time:.3f}s, Streaming speedup: {streaming_speedup:.1f}x")
     
         return results
     
@@ -308,7 +308,7 @@ class PolarsMLBenchmarkSuite:
         total_time = time.time() - start_time
         benchmark_results['metadata']['total_runtime'] = total_time
         
-        logger.info(f"Comprehensive benchmark completed in {total_time:.2f} seconds")
+        logger.info(f"Comprehensive benchmark completed in {total_time:.1f} seconds")
         
         return benchmark_results
     
@@ -322,7 +322,7 @@ class PolarsMLBenchmarkSuite:
         report_lines.append(f"Timestamp: {results['metadata']['timestamp']}")
         report_lines.append(f"Polars Version: {results['metadata'].get('polars_version', 'Unknown')}")
         report_lines.append(f"Dataset Sizes: {results['metadata']['dataset_sizes']}")
-        report_lines.append(f"Total Runtime: {results['metadata'].get('total_runtime', 0):.2f} seconds")
+        report_lines.append(f"Total Runtime: {results['metadata'].get('total_runtime', 0):.1f} seconds")
         report_lines.append("")
         
         # Feature Engineering Results
@@ -334,7 +334,7 @@ class PolarsMLBenchmarkSuite:
                 report_lines.append(f"Dataset Size: {size:,} rows")
                 report_lines.append(f"  Polars Time:  {metrics['polars_avg_time']:.3f}s (±{metrics['polars_std_time']:.3f})")
                 report_lines.append(f"  Pandas Time:  {metrics['pandas_avg_time']:.3f}s (±{metrics['pandas_std_time']:.3f})")
-                report_lines.append(f"  Speedup:      {speedup:.2f}x ({'FASTER' if speedup > 1 else 'SLOWER'})")
+                report_lines.append(f"  Speedup:      {speedup:.1f}x ({'FASTER' if speedup > 1 else 'SLOWER'})")
                 report_lines.append(f"  Features:     {metrics['polars_features_count']} (Polars) vs {metrics['pandas_features_count']} (Pandas)")
                 report_lines.append("")
         
@@ -348,7 +348,7 @@ class PolarsMLBenchmarkSuite:
                     speedup = metrics['speedup_factor']
                     report_lines.append(f"  Dataset Size: {size:,} rows")
                     report_lines.append(f"    Training Time: Polars {metrics['polars_time']:.3f}s vs Pandas {metrics['pandas_time']:.3f}s")
-                    report_lines.append(f"    Speedup: {speedup:.2f}x")
+                    report_lines.append(f"    Speedup: {speedup:.1f}x")
                     report_lines.append(f"    Accuracy: Polars {metrics['polars_accuracy']:.4f} vs Pandas {metrics['pandas_accuracy']:.4f}")
                     report_lines.append(f"    Accuracy Diff: {metrics['accuracy_difference']:.4f}")
                 report_lines.append("")
@@ -362,7 +362,7 @@ class PolarsMLBenchmarkSuite:
                 report_lines.append(f"Dataset Size: {size:,} rows")
                 report_lines.append(f"  Polars Peak:     {metrics['polars_peak_memory_mb']:.1f} MB")
                 report_lines.append(f"  Pandas Peak:     {metrics['pandas_peak_memory_mb']:.1f} MB")
-                report_lines.append(f"  Memory Efficiency: {efficiency:.2f}x ({'BETTER' if efficiency > 1 else 'WORSE'})")
+                report_lines.append(f"  Memory Efficiency: {efficiency:.1f}x ({'BETTER' if efficiency > 1 else 'WORSE'})")
                 report_lines.append("")
         
         # Batch Prediction Results
@@ -374,10 +374,10 @@ class PolarsMLBenchmarkSuite:
                 report_lines.append(f"Dataset Size: {size:,} rows")
                 report_lines.append(f"  Polars Time:    {metrics['polars_time']:.3f}s")
                 report_lines.append(f"  Pandas Time:    {metrics['pandas_time']:.3f}s")
-                report_lines.append(f"  Speedup:        {speedup:.2f}x")
+                report_lines.append(f"  Speedup:        {speedup:.1f}x")
                 if metrics.get('streaming_time'):
                     report_lines.append(f"  Streaming Time: {metrics['streaming_time']:.3f}s")
-                    report_lines.append(f"  Streaming Speedup: {metrics.get('streaming_speedup', 0):.2f}x")
+                    report_lines.append(f"  Streaming Speedup: {metrics.get('streaming_speedup', 0):.1f}x")
                 report_lines.append(f"  Predictions Match: {metrics['predictions_match']}")
                 report_lines.append("")
         
@@ -388,11 +388,11 @@ class PolarsMLBenchmarkSuite:
         # Calculate overall performance gains
         if 'feature_engineering' in results:
             avg_fe_speedup = np.mean([m['speedup_factor'] for m in results['feature_engineering'].values()])
-            report_lines.append(f"Average Feature Engineering Speedup: {avg_fe_speedup:.2f}x")
+            report_lines.append(f"Average Feature Engineering Speedup: {avg_fe_speedup:.1f}x")
         
         if 'batch_prediction' in results and 'error' not in results['batch_prediction']:
             avg_pred_speedup = np.mean([m['speedup_factor'] for m in results['batch_prediction'].values()])
-            report_lines.append(f"Average Prediction Speedup: {avg_pred_speedup:.2f}x")
+            report_lines.append(f"Average Prediction Speedup: {avg_pred_speedup:.1f}x")
         
         report_lines.append("")
         report_lines.append("RECOMMENDATIONS:")

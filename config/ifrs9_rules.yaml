@@ -30,7 +30,7 @@ risk_parameters:
   pd_calculation:
     use_ml_predictions: true
     minimum_pd_stage1: 0.0005  # 5 basis points minimum for Stage 1
-    maximum_pd_stage1: 0.05    # 5% maximum for Stage 1
+    maximum_pd_stage1: 0.04    # 4% maximum for Stage 1
     minimum_pd_stage2: 0.05    # 5% minimum for Stage 2
     maximum_pd_stage2: 0.99    # 99% maximum for Stage 2
     stage3_pd: 1.0             # 100% PD for Stage 3 (default)

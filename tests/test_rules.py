@@ -14,7 +14,7 @@ from src.rules_engine import IFRS9RulesEngine
 # Import datetime converter for safe conversions
 import sys
 sys.path.append('/home/eze/projects/ifrs9-risk-system/validation')
-from datetime_converter import DateTimeConverter
+from validation.datetime_converter import DateTimeConverter
 
 
 @pytest.mark.spark

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from .conftest import docker_exec_python
+from tests.docker.conftest import docker_exec_python
 
 
 @pytest.mark.parametrize(

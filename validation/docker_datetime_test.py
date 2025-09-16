@@ -14,7 +14,6 @@ from typing import Dict, List, Any
 
 # Configure environment for Docker validation
 os.environ.setdefault('PYARROW_IGNORE_TIMEZONE', '1')
-os.environ.setdefault('ARROW_PRE_0_15_IPC_FORMAT', '1')
 os.environ.setdefault('TZ', 'UTC')
 
 # Add validation directory to path for imports
@@ -287,7 +286,7 @@ class DockerDateTimeValidator:
                 'numpy_version': np.__version__,
                 'pyarrow_timezone_ignore': os.environ.get('PYARROW_IGNORE_TIMEZONE'),
                 'timezone': str(datetime.now().astimezone().tzinfo),
-                'arrow_format': os.environ.get('ARROW_PRE_0_15_IPC_FORMAT')
+                'pyarrow_ignore_timezone': os.environ.get('PYARROW_IGNORE_TIMEZONE')
             }
         }
         

@@ -24,17 +24,28 @@ def _run(cmd, timeout=180) -> Tuple[int, str, str]:
     return p.returncode, p.stdout.decode(), p.stderr.decode()
 
 
-def _compose_cmd() -> list:
+def _compose_cmd() -> list | None:
     try:
         if subprocess.run(["docker", "compose", "version"], capture_output=True).returncode == 0:
             return ["docker", "compose"]
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         pass
-    return ["docker-compose"]
+
+    try:
+        if subprocess.run(["docker-compose", "version"], capture_output=True).returncode == 0:
+            return ["docker-compose"]
+    except (FileNotFoundError, OSError):
+        pass
+
+    return None
 
 
 def _container_running(name: str) -> bool:
-    rc, out, _ = _run(_compose_cmd() + ["ps", "--format", "json"], timeout=30)
+    compose_cmd = _compose_cmd()
+    if compose_cmd is None:
+        return False
+
+    rc, out, _ = _run(compose_cmd + ["ps", "--format", "json"], timeout=30)
     if rc != 0 or not out.strip():
         return False
     try:
@@ -48,6 +59,10 @@ def _container_running(name: str) -> bool:
 
 
 def _exec_python(container: str, code: str, env: Dict[str, str] | None = None, timeout: int = 300):
+    compose_cmd = _compose_cmd()
+    if compose_cmd is None:
+        raise RuntimeError("Docker not available for container execution")
+
     env_parts = []
     if env:
         for k, v in env.items():
@@ -58,6 +73,8 @@ def _exec_python(container: str, code: str, env: Dict[str, str] | None = None, t
 
 @pytest.fixture(scope="module")
 def jupyter_available():
+    if _compose_cmd() is None:
+        pytest.skip("Docker or docker-compose not available inside test environment")
     if not _container_running("jupyter"):
         pytest.skip("jupyter container not running; start docker stack first")
     return True
@@ -183,4 +200,3 @@ print(f"lgb_acc={lgb_a:.3f}")
     # Loose thresholds to accommodate container variance
     assert stats["xgb_sec"] < 12.0 and stats["lgb_sec"] < 12.0, f"Training too slow: {stats}"
     assert stats["xgb_acc"] >= 0.5 and stats["lgb_acc"] >= 0.5, f"Poor accuracy: {stats}"
-
