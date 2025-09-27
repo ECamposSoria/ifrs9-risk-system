@@ -1,22 +1,27 @@
-"""Pytest configuration and fixtures for IFRS9 system tests.
-
-This module provides shared fixtures and configuration for all test modules,
-focusing on optimal PySpark session management and test isolation.
-"""
+"""Pytest configuration and fixtures for IFRS9 system tests."""
 
 import os
 import sys
-import os
+import warnings
+
 import pytest
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Generator, Dict, Any
 
+from sklearn.exceptions import UndefinedMetricWarning
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 
 # Import datetime converter from validation directory
 from validation.datetime_converter import DateTimeConverter
+
+
+warnings.filterwarnings(
+    "ignore",
+    message="Precision and F-score are ill-defined.*",
+    category=UndefinedMetricWarning,
+)
 
 
 @pytest.fixture(scope="session")

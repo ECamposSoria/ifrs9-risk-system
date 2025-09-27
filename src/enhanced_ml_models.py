@@ -519,6 +519,11 @@ class OptimizedMLPipeline:
         
         # DataFrame format tracking
         self._input_format = None  # Track if input is polars or pandas
+
+        # Categorical metadata for warning-free preprocessing
+        self.categorical_levels_: Dict[str, List[str]] = {}
+        self._categorical_features: List[str] = []
+        self.processed_feature_names: List[str] = []
         
         if self.use_polars:
             logger.info("OptimizedMLPipeline configured with Polars optimization")
@@ -640,14 +645,32 @@ class OptimizedMLPipeline:
         # Create preprocessor for numerical and categorical features
         numeric_features = X_train.select_dtypes(include=[np.number]).columns
         categorical_features = X_train.select_dtypes(exclude=[np.number]).columns
+
+        X_train = X_train.copy()
+        X_test = X_test.copy()
+
+        self._categorical_features = list(categorical_features)
+        levels = self._learn_categorical_levels(X_train, self._categorical_features)
+        self.categorical_levels_ = levels
+        X_train = self._apply_categorical_levels(X_train)
+        X_test = self._apply_categorical_levels(X_test)
         
         from sklearn.preprocessing import OneHotEncoder
-        
+
+        encoder_kwargs: Dict[str, Any] = {
+            'drop': 'first',
+            'sparse_output': False,
+            'handle_unknown': 'ignore'
+        }
+        if self._categorical_features:
+            encoder_kwargs['categories'] = [
+                levels[col] for col in self._categorical_features
+            ]
+
         preprocessor = ColumnTransformer(
             transformers=[
-                ('num', StandardScaler(), numeric_features),
-                ('cat', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'), 
-                 categorical_features)
+                ('num', StandardScaler(), list(numeric_features)),
+                ('cat', OneHotEncoder(**encoder_kwargs), self._categorical_features)
             ]
         )
         
@@ -676,6 +699,7 @@ class OptimizedMLPipeline:
             categorical_feature_names = []
         
         all_feature_names = numeric_feature_names + categorical_feature_names
+        self.processed_feature_names = all_feature_names
         
         X_train_final = pd.DataFrame(X_train_processed, columns=all_feature_names)
         X_test_final = pd.DataFrame(X_test_processed, columns=all_feature_names)
@@ -694,7 +718,44 @@ class OptimizedMLPipeline:
         X_test_pandas = X_test.to_pandas() if POLARS_AVAILABLE and isinstance(X_test, pl.DataFrame) else X_test
         logger.info(f"Polars data prepared (converted to pandas): {len(X_train_pandas)} training samples, {len(X_test_pandas)} test samples")
         return X_train_pandas, X_test_pandas, y_train, y_test
-    
+
+    def _learn_categorical_levels(self, X: pd.DataFrame, categorical_features: List[str]) -> Dict[str, List[str]]:
+        levels: Dict[str, List[str]] = {}
+        for column in categorical_features:
+            if column not in X.columns:
+                continue
+            series = X[column].fillna("__missing__").astype(str)
+            ordered: List[str] = []
+            for value in series:
+                if value not in ordered:
+                    ordered.append(value)
+            if "__missing__" not in ordered:
+                ordered.append("__missing__")
+            ordered = [val for val in ordered if val != "__other__"]
+            ordered.append("__other__")
+            levels[column] = ordered
+        return levels
+
+    def _apply_categorical_levels(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not self.categorical_levels_:
+            return X
+        sanitized = X.copy()
+        for column, allowed in self.categorical_levels_.items():
+            if column not in sanitized.columns:
+                continue
+            series = sanitized[column].fillna("__missing__").astype(str)
+            allowed_set = set(allowed)
+            series = series.where(series.isin(allowed_set), "__other__")
+            sanitized[column] = series
+        return sanitized
+
+    def _to_processed_dataframe(self, matrix: Any) -> pd.DataFrame:
+        if isinstance(matrix, pd.DataFrame):
+            return matrix
+        if self.processed_feature_names:
+            return pd.DataFrame(matrix, columns=self.processed_feature_names)
+        return pd.DataFrame(matrix)
+
     def _needs_pandas_conversion(self) -> bool:
         """Check if we need to convert to pandas for model training"""
         # For now, most models need pandas conversion
@@ -895,7 +956,10 @@ class OptimizedMLPipeline:
         
         # Classification report
         results['classification_report'] = classification_report(
-            y_test, y_test_pred, output_dict=True
+            y_test,
+            y_test_pred,
+            output_dict=True,
+            zero_division=0,
         )
         
         # Confusion matrix
@@ -967,7 +1031,8 @@ class OptimizedMLPipeline:
     
     def _generate_shap_explanations_pandas(self, X_sample: pd.DataFrame, model: Any, model_name: str, max_samples: int) -> Dict[str, Any]:
         """Generate SHAP explanations using pandas (original implementation)"""
-        
+        X_sample = self._apply_categorical_levels(X_sample)
+
         # Sample data for explanation
         X_explain = X_sample.sample(min(max_samples, len(X_sample)), random_state=self.random_state)
         
@@ -1028,6 +1093,7 @@ class OptimizedMLPipeline:
             
             # Convert to pandas for SHAP (most SHAP explainers expect pandas/numpy)
             X_explain_pd = X_explain_pl.to_pandas()
+            X_explain_pd = self._apply_categorical_levels(X_explain_pd)
             
             # Use pandas SHAP implementation but track that we preprocessed with Polars
             shap_result = self._generate_shap_explanations_pandas(X_explain_pd, model, model_name, sample_size)
@@ -1103,7 +1169,10 @@ class OptimizedMLPipeline:
                 'model_scores': self.model_scores,
                 'feature_importance': self.feature_importance,
                 'training_timestamp': datetime.now().isoformat(),
-                'models_config': self.models_config
+                'models_config': self.models_config,
+                'categorical_levels': self.categorical_levels_,
+                'categorical_features': self._categorical_features,
+                'processed_feature_names': self.processed_feature_names,
             }
             
             metadata_file = save_path / 'training_metadata.json'
@@ -1135,6 +1204,9 @@ class OptimizedMLPipeline:
                 self.model_scores = metadata.get('model_scores', {})
                 self.feature_importance = metadata.get('feature_importance', {})
                 self.models_config = metadata.get('models_config', self.models_config)
+                self.categorical_levels_ = metadata.get('categorical_levels', {})
+                self._categorical_features = metadata.get('categorical_features', [])
+                self.processed_feature_names = metadata.get('processed_feature_names', [])
             
             # Load trained models
             models_path = load_path / 'models'
@@ -1190,7 +1262,11 @@ class OptimizedMLPipeline:
         
         # Apply feature engineering and preprocessing
         X_engineered = self.feature_engineer.transform(X)
+        if hasattr(X_engineered, "to_pandas") and not isinstance(X_engineered, pd.DataFrame):
+            X_engineered = X_engineered.to_pandas()
+        X_engineered = self._apply_categorical_levels(X_engineered)
         X_processed = self.preprocessor.transform(X_engineered)
+        X_processed = self._to_processed_dataframe(X_processed)
         
         # Make predictions
         predictions = self.best_model.predict(X_processed)
@@ -1221,10 +1297,12 @@ class OptimizedMLPipeline:
         # Convert to pandas for model prediction (most models expect this)
         if self._needs_pandas_conversion():
             X_pandas = X_engineered.to_pandas()
+            X_pandas = self._apply_categorical_levels(X_pandas)
             X_processed = self.preprocessor.transform(X_pandas)
+            X_processed = self._to_processed_dataframe(X_processed)
         else:
             X_processed = X_engineered
-        
+
         # Make predictions
         predictions = self.best_model.predict(X_processed)
         

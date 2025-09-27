@@ -233,8 +233,10 @@ class CreditRiskClassifier:
             "cv_std": cv_scores.std(),
             "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
             "classification_report": classification_report(
-                y_test, y_pred,
-                target_names=self.label_encoder.classes_
+                y_test,
+                y_pred,
+                target_names=self.label_encoder.classes_,
+                zero_division=0,
             ),
             "feature_importance": feature_importance.head(10).to_dict("records"),
         }

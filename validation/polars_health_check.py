@@ -60,10 +60,11 @@ def health_check(threshold_ms: int, share_file: str | None, data_path: str | Non
     try:
         import polars as pl
         N = 120000
+        seq = pl.arange(0, N, eager=True)
         df = pl.DataFrame({
-            "id": pl.arange(0, N),
-            "g": (pl.arange(0, N) % 20),
-            "x": pl.arange(0, N).cast(pl.Float64),
+            "id": seq,
+            "g": (seq % 20),
+            "x": seq.cast(pl.Float64),
         })
         t0 = time.time()
         agg = df.group_by("g").agg([pl.col("x").mean().alias("mx"), pl.len().alias("cnt")])
@@ -143,4 +144,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

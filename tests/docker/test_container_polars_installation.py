@@ -62,7 +62,8 @@ def test_polars_feature_flags(docker_containers, polars_env):
     # Verify streaming collect and lazy are available
     code = """
 import polars as pl
-df = pl.DataFrame({'g': (pl.arange(0, 10000) % 13), 'x': pl.arange(0,10000)})
+idx = pl.arange(0, 10000, eager=True)
+df = pl.DataFrame({'g': (idx % 13), 'x': idx})
 out = df.lazy().group_by('g').agg(pl.len().alias('cnt')).collect(streaming=True)
 print(f"ok={int(out.height>0)}")
 """
@@ -71,4 +72,3 @@ print(f"ok={int(out.height>0)}")
         assert rc == 0, f"streaming/lazy failed in {c}: {err or out}"
         kv = dict([ln.split("=", 1) for ln in out.strip().splitlines() if "=" in ln])
         assert kv.get("ok") == "1"
-

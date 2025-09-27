@@ -12,9 +12,11 @@ import pytest
 import numpy as np
 import pandas as pd
 import polars as pl
+import warnings
 from typing import Dict, Any
 import logging
 from unittest.mock import Mock, patch
+
 
 # Import components to test
 from src.enhanced_ml_models import OptimizedMLPipeline, AdvancedFeatureEngineer

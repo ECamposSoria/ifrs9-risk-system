@@ -18,7 +18,7 @@ from pyspark.sql.utils import AnalysisException
 logger = logging.getLogger(__name__)
 
 
-class TestCleanupManager:
+class CleanupManager:
     """Manager for cleaning up test resources and temporary objects."""
     
     def __init__(self, spark: SparkSession, test_name: str = "unknown"):

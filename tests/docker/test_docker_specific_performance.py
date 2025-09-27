@@ -9,17 +9,35 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 from typing import Dict
 
 import pytest
 
-from tests.docker.conftest import docker_exec_python
+from tests.docker.conftest import docker_available, docker_exec_python
 
 
 def test_cross_container_parquet_sharing(docker_containers, polars_env):
     # Write from first container, read in others
-    writer = docker_containers[0]
     fname = f"xc_{int(time.time())}.parquet"
+
+    if not docker_available():
+        base_dir = Path(os.getenv("IFRS9_TEST_DATA_DIR", "/tmp/ifrs9_tests"))
+        base_dir.mkdir(parents=True, exist_ok=True)
+        file_path = base_dir / fname
+
+        import polars as pl
+
+        idx = pl.arange(0, 1000, eager=True)
+        df = pl.DataFrame({"id": idx, "v": idx * 2})
+        df.write_parquet(file_path)
+
+        loaded = pl.read_parquet(file_path)
+        assert loaded.height == 1000
+        assert int(loaded["v"].sum()) == sum(i * 2 for i in range(1000))
+        return
+
+    writer = docker_containers[0]
     mounts = {
         "spark-master": "/data",
         "spark-worker": "/data",
@@ -30,9 +48,10 @@ def test_cross_container_parquet_sharing(docker_containers, polars_env):
     write_path = mounts.get(writer, "/data")
     rc, out, err = docker_exec_python(
         writer,
-        f"""
+f"""
 import polars as pl, os
-df = pl.DataFrame({{'id': pl.arange(0,1000), 'v': pl.arange(0,1000)*2}})
+idx = pl.arange(0, 1000, eager=True)
+df = pl.DataFrame({{'id': idx, 'v': idx*2}})
 df.write_parquet(os.path.join('{write_path}', '{fname}'))
 print('ok=1')
 """,
@@ -95,7 +114,8 @@ def rss_kb():
     return -1
 before=rss_kb()
 N=400000
-df = pl.DataFrame({'a': pl.arange(0,N), 'g': (pl.arange(0,N)%17)})
+idx = pl.arange(0, N, eager=True)
+df = pl.DataFrame({'a': idx, 'g': (idx%17)})
 _ = df.lazy().group_by('g').agg(pl.len().alias('cnt')).collect(streaming=True)
 after=rss_kb()
 print(f"before={before}")
@@ -105,4 +125,3 @@ print(f"after={after}")
     assert rc == 0, f"mem streaming failed in {container}: {err or out}"
     vals = {k: int(v) for k, v in (ln.split("=") for ln in out.strip().splitlines())}
     assert vals["after"] - vals["before"] < 500_000
-

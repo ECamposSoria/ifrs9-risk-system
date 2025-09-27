@@ -96,9 +96,12 @@ resource "google_bigquery_dataset" "analytics_dataset" {
   }
   
   # Additional access for dashboards
-  access {
-    role   = "READER"
-    group_by_email = var.dashboard_viewers_group
+  dynamic "access" {
+    for_each = length(var.dashboard_viewers_group) > 0 ? [var.dashboard_viewers_group] : []
+    content {
+      role           = "READER"
+      group_by_email = access.value
+    }
   }
 }
 
@@ -131,6 +134,7 @@ resource "google_bigquery_dataset" "ml_dataset" {
 
 # Raw loan data table
 resource "google_bigquery_table" "loan_portfolio" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.raw_dataset.dataset_id
   table_id   = "loan_portfolio"
   
@@ -146,13 +150,14 @@ resource "google_bigquery_table" "loan_portfolio" {
   # Clustering for query optimization
   clustering = ["region", "producto_tipo", "provision_stage"]
   
-  schema = file("${path.module}/schemas/loan_portfolio.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/loan_portfolio.json") : null
   
   labels = var.labels
 }
 
 # Customer data table
 resource "google_bigquery_table" "customers" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.raw_dataset.dataset_id
   table_id   = "customers"
   
@@ -160,13 +165,14 @@ resource "google_bigquery_table" "customers" {
   
   clustering = ["region", "customer_segment"]
   
-  schema = file("${path.module}/schemas/customers.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/customers.json") : null
   
   labels = var.labels
 }
 
 # Economic indicators table
 resource "google_bigquery_table" "economic_indicators" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.raw_dataset.dataset_id
   table_id   = "economic_indicators"
   
@@ -177,13 +183,14 @@ resource "google_bigquery_table" "economic_indicators" {
     field = "indicator_date"
   }
   
-  schema = file("${path.module}/schemas/economic_indicators.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/economic_indicators.json") : null
   
   labels = var.labels
 }
 
 # IFRS9 staging results table
 resource "google_bigquery_table" "ifrs9_staging" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.processed_dataset.dataset_id
   table_id   = "ifrs9_staging_results"
   
@@ -197,13 +204,14 @@ resource "google_bigquery_table" "ifrs9_staging" {
   
   clustering = ["provision_stage", "region"]
   
-  schema = file("${path.module}/schemas/ifrs9_staging.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/ifrs9_staging.json") : null
   
   labels = var.labels
 }
 
 # ECL calculations table
 resource "google_bigquery_table" "ecl_calculations" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.processed_dataset.dataset_id
   table_id   = "ecl_calculations"
   
@@ -217,13 +225,14 @@ resource "google_bigquery_table" "ecl_calculations" {
   
   clustering = ["provision_stage", "calculation_method"]
   
-  schema = file("${path.module}/schemas/ecl_calculations.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/ecl_calculations.json") : null
   
   labels = var.labels
 }
 
 # ML features table
 resource "google_bigquery_table" "ml_features" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.ml_dataset.dataset_id
   table_id   = "ml_features"
   
@@ -237,13 +246,14 @@ resource "google_bigquery_table" "ml_features" {
   
   clustering = ["feature_set_version", "model_type"]
   
-  schema = file("${path.module}/schemas/ml_features.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/ml_features.json") : null
   
   labels = var.labels
 }
 
 # Model predictions table
 resource "google_bigquery_table" "model_predictions" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.ml_dataset.dataset_id
   table_id   = "model_predictions"
   
@@ -257,25 +267,27 @@ resource "google_bigquery_table" "model_predictions" {
   
   clustering = ["model_name", "model_version"]
   
-  schema = file("${path.module}/schemas/model_predictions.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/model_predictions.json") : null
   
   labels = var.labels
 }
 
 # Create analytical views
 resource "google_bigquery_routine" "create_analytics_views" {
+  count          = var.enable_tables ? 1 : 0
   dataset_id      = google_bigquery_dataset.analytics_dataset.dataset_id
   routine_id      = "create_ifrs9_views"
   routine_type    = "PROCEDURE"
   language        = "SQL"
   
-  definition_body = file("${path.module}/sql/create_analytics_views.sql")
+  definition_body = var.enable_tables ? file("${path.module}/sql/create_analytics_views.sql") : null
   
   description = "Creates all IFRS9 analytical views for dashboards"
 }
 
 # Scheduled queries for data processing
 resource "google_bigquery_data_transfer_config" "daily_aggregation" {
+  count          = var.enable_tables ? 1 : 0
   display_name   = "IFRS9 Daily Aggregation - ${title(var.environment)}"
   location       = var.region
   data_source_id = "scheduled_query"
@@ -285,19 +297,15 @@ resource "google_bigquery_data_transfer_config" "daily_aggregation" {
   destination_dataset_id = google_bigquery_dataset.analytics_dataset.dataset_id
   
   params = {
-    query = file("${path.module}/sql/daily_aggregation.sql")
+    query            = var.enable_tables ? file("${path.module}/sql/daily_aggregation.sql") : ""
     write_disposition = "WRITE_TRUNCATE"
-    use_legacy_sql = false
+    use_legacy_sql    = false
   }
-  
-  depends_on = [
-    google_bigquery_table.ifrs9_staging,
-    google_bigquery_table.ecl_calculations
-  ]
 }
 
 # Data quality monitoring table
 resource "google_bigquery_table" "data_quality_metrics" {
+  count     = var.enable_tables ? 1 : 0
   dataset_id = google_bigquery_dataset.analytics_dataset.dataset_id
   table_id   = "data_quality_metrics"
   
@@ -309,7 +317,7 @@ resource "google_bigquery_table" "data_quality_metrics" {
     require_partition_filter = true
   }
   
-  schema = file("${path.module}/schemas/data_quality_metrics.json")
+  schema = var.enable_tables ? file("${path.module}/schemas/data_quality_metrics.json") : null
   
   labels = var.labels
 }

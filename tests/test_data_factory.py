@@ -44,7 +44,7 @@ class LoanProfile:
     credit_score_range: tuple = (300, 850)
 
 
-class TestDataFactory:
+class DataFactory:
     """Factory for generating comprehensive test data for IFRS9 system."""
     
     # Loan profiles by type

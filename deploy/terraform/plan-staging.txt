@@ -1,0 +1,2000 @@
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # google_project_service.required_apis["aiplatform.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "aiplatform.googleapis.com"
+    }
+
+  # google_project_service.required_apis["bigquery.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "bigquery.googleapis.com"
+    }
+
+  # google_project_service.required_apis["cloudkms.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "cloudkms.googleapis.com"
+    }
+
+  # google_project_service.required_apis["composer.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "composer.googleapis.com"
+    }
+
+  # google_project_service.required_apis["compute.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "compute.googleapis.com"
+    }
+
+  # google_project_service.required_apis["container.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "container.googleapis.com"
+    }
+
+  # google_project_service.required_apis["dataproc.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "dataproc.googleapis.com"
+    }
+
+  # google_project_service.required_apis["iam.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "iam.googleapis.com"
+    }
+
+  # google_project_service.required_apis["logging.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "logging.googleapis.com"
+    }
+
+  # google_project_service.required_apis["monitoring.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "monitoring.googleapis.com"
+    }
+
+  # google_project_service.required_apis["secretmanager.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "secretmanager.googleapis.com"
+    }
+
+  # google_project_service.required_apis["storage.googleapis.com"] will be created
+  + resource "google_project_service" "required_apis" {
+      + disable_dependent_services = false
+      + disable_on_destroy         = false
+      + id                         = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + service                    = "storage.googleapis.com"
+    }
+
+  # module.backup.google_gke_backup_backup_plan.primary will be created
+  + resource "google_gke_backup_backup_plan" "primary" {
+      + cluster             = (known after apply)
+      + deactivated         = (known after apply)
+      + effective_labels    = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + etag                = (known after apply)
+      + id                  = (known after apply)
+      + labels              = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location            = "southamerica-east1"
+      + name                = "ifrs9-staging-cluster-backup"
+      + project             = "academic-ocean-472500-j4"
+      + protected_pod_count = (known after apply)
+      + state               = (known after apply)
+      + state_reason        = (known after apply)
+      + terraform_labels    = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uid                 = (known after apply)
+
+      + backup_config {
+          + all_namespaces      = true
+          + include_secrets     = true
+          + include_volume_data = true
+        }
+
+      + backup_schedule {
+          + cron_schedule = "0 2 * * *"
+          + paused        = (known after apply)
+        }
+
+      + retention_policy {
+          + backup_delete_lock_days = 30
+          + backup_retain_days      = 30
+          + locked                  = (known after apply)
+        }
+    }
+
+  # module.backup.google_storage_transfer_job.gcs["ifrs9-academic-ocean-472500-j4-staging-processed->ifrs9-academic-ocean-472500-j4-staging-backups"] will be created
+  + resource "google_storage_transfer_job" "gcs" {
+      + creation_time          = (known after apply)
+      + deletion_time          = (known after apply)
+      + description            = "IFRS9 staging storage backup ifrs9-academic-ocean-472500-j4-staging-processed"
+      + id                     = (known after apply)
+      + last_modification_time = (known after apply)
+      + name                   = (known after apply)
+      + project                = "academic-ocean-472500-j4"
+      + status                 = "ENABLED"
+
+      + schedule {
+          + repeat_interval = "86400s"
+
+          + schedule_start_date {
+              + day   = (known after apply)
+              + month = (known after apply)
+              + year  = (known after apply)
+            }
+
+          + start_time_of_day {
+              + hours   = 2
+              + minutes = 0
+              + nanos   = 0
+              + seconds = 0
+            }
+        }
+
+      + transfer_spec {
+          + sink_agent_pool_name   = (known after apply)
+          + source_agent_pool_name = (known after apply)
+
+          + gcs_data_sink {
+              + bucket_name = "ifrs9-academic-ocean-472500-j4-staging-backups"
+              + path        = (known after apply)
+            }
+
+          + gcs_data_source {
+              + bucket_name = "ifrs9-academic-ocean-472500-j4-staging-processed"
+              + path        = (known after apply)
+            }
+
+          + transfer_options {
+              + delete_objects_from_source_after_transfer  = false
+              + overwrite_objects_already_existing_in_sink = true
+            }
+        }
+    }
+
+  # module.backup.google_storage_transfer_job.gcs["ifrs9-academic-ocean-472500-j4-staging-raw->ifrs9-academic-ocean-472500-j4-staging-backups"] will be created
+  + resource "google_storage_transfer_job" "gcs" {
+      + creation_time          = (known after apply)
+      + deletion_time          = (known after apply)
+      + description            = "IFRS9 staging storage backup ifrs9-academic-ocean-472500-j4-staging-raw"
+      + id                     = (known after apply)
+      + last_modification_time = (known after apply)
+      + name                   = (known after apply)
+      + project                = "academic-ocean-472500-j4"
+      + status                 = "ENABLED"
+
+      + schedule {
+          + repeat_interval = "86400s"
+
+          + schedule_start_date {
+              + day   = (known after apply)
+              + month = (known after apply)
+              + year  = (known after apply)
+            }
+
+          + start_time_of_day {
+              + hours   = 2
+              + minutes = 0
+              + nanos   = 0
+              + seconds = 0
+            }
+        }
+
+      + transfer_spec {
+          + sink_agent_pool_name   = (known after apply)
+          + source_agent_pool_name = (known after apply)
+
+          + gcs_data_sink {
+              + bucket_name = "ifrs9-academic-ocean-472500-j4-staging-backups"
+              + path        = (known after apply)
+            }
+
+          + gcs_data_source {
+              + bucket_name = "ifrs9-academic-ocean-472500-j4-staging-raw"
+              + path        = (known after apply)
+            }
+
+          + transfer_options {
+              + delete_objects_from_source_after_transfer  = false
+              + overwrite_objects_already_existing_in_sink = true
+            }
+        }
+    }
+
+  # module.bigquery.google_bigquery_dataset.datasets["analytics"] will be created
+  + resource "google_bigquery_dataset" "datasets" {
+      + creation_time              = (known after apply)
+      + dataset_id                 = "ifrs9_analytics_staging"
+      + default_collation          = (known after apply)
+      + delete_contents_on_destroy = false
+      + description                = "Analytics dataset for IFRS9 staging"
+      + effective_labels           = {
+          + "data_classification" = "analytics"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + etag                       = (known after apply)
+      + friendly_name              = "IFRS9 Analytics - Staging"
+      + id                         = (known after apply)
+      + is_case_insensitive        = (known after apply)
+      + labels                     = {
+          + "data_classification" = "analytics"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + last_modified_time         = (known after apply)
+      + location                   = "southamerica-east1"
+      + max_time_travel_hours      = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + self_link                  = (known after apply)
+      + storage_billing_model      = (known after apply)
+      + terraform_labels           = {
+          + "data_classification" = "analytics"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+
+      + default_encryption_configuration {
+          + kms_key_name = (known after apply)
+        }
+    }
+
+  # module.bigquery.google_bigquery_dataset.datasets["ml"] will be created
+  + resource "google_bigquery_dataset" "datasets" {
+      + creation_time               = (known after apply)
+      + dataset_id                  = "ifrs9_ml_staging"
+      + default_collation           = (known after apply)
+      + default_table_expiration_ms = 31536000000
+      + delete_contents_on_destroy  = false
+      + description                 = "Ml dataset for IFRS9 staging"
+      + effective_labels            = {
+          + "data_classification" = "ml"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + etag                        = (known after apply)
+      + friendly_name               = "IFRS9 Ml - Staging"
+      + id                          = (known after apply)
+      + is_case_insensitive         = (known after apply)
+      + labels                      = {
+          + "data_classification" = "ml"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + last_modified_time          = (known after apply)
+      + location                    = "southamerica-east1"
+      + max_time_travel_hours       = (known after apply)
+      + project                     = "academic-ocean-472500-j4"
+      + self_link                   = (known after apply)
+      + storage_billing_model       = (known after apply)
+      + terraform_labels            = {
+          + "data_classification" = "ml"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+
+      + default_encryption_configuration {
+          + kms_key_name = (known after apply)
+        }
+    }
+
+  # module.bigquery.google_bigquery_dataset.datasets["processed"] will be created
+  + resource "google_bigquery_dataset" "datasets" {
+      + creation_time               = (known after apply)
+      + dataset_id                  = "ifrs9_processed_staging"
+      + default_collation           = (known after apply)
+      + default_table_expiration_ms = 15552000000
+      + delete_contents_on_destroy  = false
+      + description                 = "Processed dataset for IFRS9 staging"
+      + effective_labels            = {
+          + "data_classification" = "processed"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + etag                        = (known after apply)
+      + friendly_name               = "IFRS9 Processed - Staging"
+      + id                          = (known after apply)
+      + is_case_insensitive         = (known after apply)
+      + labels                      = {
+          + "data_classification" = "processed"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + last_modified_time          = (known after apply)
+      + location                    = "southamerica-east1"
+      + max_time_travel_hours       = (known after apply)
+      + project                     = "academic-ocean-472500-j4"
+      + self_link                   = (known after apply)
+      + storage_billing_model       = (known after apply)
+      + terraform_labels            = {
+          + "data_classification" = "processed"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+
+      + default_encryption_configuration {
+          + kms_key_name = (known after apply)
+        }
+    }
+
+  # module.bigquery.google_bigquery_dataset.datasets["raw"] will be created
+  + resource "google_bigquery_dataset" "datasets" {
+      + creation_time               = (known after apply)
+      + dataset_id                  = "ifrs9_raw_staging"
+      + default_collation           = (known after apply)
+      + default_table_expiration_ms = 7776000000
+      + delete_contents_on_destroy  = false
+      + description                 = "Raw dataset for IFRS9 staging"
+      + effective_labels            = {
+          + "data_classification" = "raw"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + etag                        = (known after apply)
+      + friendly_name               = "IFRS9 Raw - Staging"
+      + id                          = (known after apply)
+      + is_case_insensitive         = (known after apply)
+      + labels                      = {
+          + "data_classification" = "raw"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+      + last_modified_time          = (known after apply)
+      + location                    = "southamerica-east1"
+      + max_time_travel_hours       = (known after apply)
+      + project                     = "academic-ocean-472500-j4"
+      + self_link                   = (known after apply)
+      + storage_billing_model       = (known after apply)
+      + terraform_labels            = {
+          + "data_classification" = "raw"
+          + "environment"         = "staging"
+          + "managed_by"          = "terraform"
+          + "project"             = "ifrs9-risk-system"
+        }
+
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+      + access {
+          + role           = "READER"
+          + user_by_email  = (known after apply)
+            # (4 unchanged attributes hidden)
+        }
+
+      + default_encryption_configuration {
+          + kms_key_name = (known after apply)
+        }
+    }
+
+  # module.cloud_storage.google_storage_bucket.managed["artifacts"] will be created
+  + resource "google_storage_bucket" "managed" {
+      + effective_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + force_destroy               = false
+      + id                          = (known after apply)
+      + labels                      = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location                    = "SOUTHAMERICA-EAST1"
+      + name                        = "ifrs9-academic-ocean-472500-j4-staging-artifacts"
+      + project                     = "academic-ocean-472500-j4"
+      + project_number              = (known after apply)
+      + public_access_prevention    = (known after apply)
+      + rpo                         = (known after apply)
+      + self_link                   = (known after apply)
+      + storage_class               = "STANDARD"
+      + terraform_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uniform_bucket_level_access = true
+      + url                         = (known after apply)
+
+      + encryption {
+          + default_kms_key_name = (known after apply)
+        }
+
+      + lifecycle_rule {
+          + action {
+              + storage_class = "NEARLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 30
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + storage_class = "COLDLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 90
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + type          = "Delete"
+                # (1 unchanged attribute hidden)
+            }
+          + condition {
+              + age                    = 365
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+
+      + soft_delete_policy (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # module.cloud_storage.google_storage_bucket.managed["backups"] will be created
+  + resource "google_storage_bucket" "managed" {
+      + effective_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + force_destroy               = false
+      + id                          = (known after apply)
+      + labels                      = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location                    = "SOUTHAMERICA-EAST1"
+      + name                        = "ifrs9-academic-ocean-472500-j4-staging-backups"
+      + project                     = "academic-ocean-472500-j4"
+      + project_number              = (known after apply)
+      + public_access_prevention    = (known after apply)
+      + rpo                         = (known after apply)
+      + self_link                   = (known after apply)
+      + storage_class               = "STANDARD"
+      + terraform_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uniform_bucket_level_access = true
+      + url                         = (known after apply)
+
+      + encryption {
+          + default_kms_key_name = (known after apply)
+        }
+
+      + lifecycle_rule {
+          + action {
+              + storage_class = "NEARLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 30
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + storage_class = "COLDLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 90
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + type          = "Delete"
+                # (1 unchanged attribute hidden)
+            }
+          + condition {
+              + age                    = 365
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+
+      + soft_delete_policy (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # module.cloud_storage.google_storage_bucket.managed["models"] will be created
+  + resource "google_storage_bucket" "managed" {
+      + effective_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + force_destroy               = false
+      + id                          = (known after apply)
+      + labels                      = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location                    = "SOUTHAMERICA-EAST1"
+      + name                        = "ifrs9-academic-ocean-472500-j4-staging-models"
+      + project                     = "academic-ocean-472500-j4"
+      + project_number              = (known after apply)
+      + public_access_prevention    = (known after apply)
+      + rpo                         = (known after apply)
+      + self_link                   = (known after apply)
+      + storage_class               = "STANDARD"
+      + terraform_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uniform_bucket_level_access = true
+      + url                         = (known after apply)
+
+      + encryption {
+          + default_kms_key_name = (known after apply)
+        }
+
+      + lifecycle_rule {
+          + action {
+              + storage_class = "NEARLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 30
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + storage_class = "COLDLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 90
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + type          = "Delete"
+                # (1 unchanged attribute hidden)
+            }
+          + condition {
+              + age                    = 365
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+
+      + soft_delete_policy (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # module.cloud_storage.google_storage_bucket.managed["processed"] will be created
+  + resource "google_storage_bucket" "managed" {
+      + effective_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + force_destroy               = false
+      + id                          = (known after apply)
+      + labels                      = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location                    = "SOUTHAMERICA-EAST1"
+      + name                        = "ifrs9-academic-ocean-472500-j4-staging-processed"
+      + project                     = "academic-ocean-472500-j4"
+      + project_number              = (known after apply)
+      + public_access_prevention    = (known after apply)
+      + rpo                         = (known after apply)
+      + self_link                   = (known after apply)
+      + storage_class               = "STANDARD"
+      + terraform_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uniform_bucket_level_access = true
+      + url                         = (known after apply)
+
+      + encryption {
+          + default_kms_key_name = (known after apply)
+        }
+
+      + lifecycle_rule {
+          + action {
+              + storage_class = "NEARLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 30
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + storage_class = "COLDLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 90
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + type          = "Delete"
+                # (1 unchanged attribute hidden)
+            }
+          + condition {
+              + age                    = 365
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+
+      + soft_delete_policy (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # module.cloud_storage.google_storage_bucket.managed["raw"] will be created
+  + resource "google_storage_bucket" "managed" {
+      + effective_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + force_destroy               = false
+      + id                          = (known after apply)
+      + labels                      = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location                    = "SOUTHAMERICA-EAST1"
+      + name                        = "ifrs9-academic-ocean-472500-j4-staging-raw"
+      + project                     = "academic-ocean-472500-j4"
+      + project_number              = (known after apply)
+      + public_access_prevention    = (known after apply)
+      + rpo                         = (known after apply)
+      + self_link                   = (known after apply)
+      + storage_class               = "STANDARD"
+      + terraform_labels            = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + uniform_bucket_level_access = true
+      + url                         = (known after apply)
+
+      + encryption {
+          + default_kms_key_name = (known after apply)
+        }
+
+      + lifecycle_rule {
+          + action {
+              + storage_class = "NEARLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 30
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + storage_class = "COLDLINE"
+              + type          = "SetStorageClass"
+            }
+          + condition {
+              + age                    = 90
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+      + lifecycle_rule {
+          + action {
+              + type          = "Delete"
+                # (1 unchanged attribute hidden)
+            }
+          + condition {
+              + age                    = 365
+              + matches_prefix         = []
+              + matches_storage_class  = []
+              + matches_suffix         = []
+              + send_age_if_zero       = true
+              + with_state             = (known after apply)
+                # (3 unchanged attributes hidden)
+            }
+        }
+
+      + soft_delete_policy (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # module.composer.google_composer_environment.primary will be created
+  + resource "google_composer_environment" "primary" {
+      + effective_labels = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + id               = (known after apply)
+      + labels           = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + name             = "ifrs9-staging-composer"
+      + project          = "academic-ocean-472500-j4"
+      + region           = "southamerica-east1"
+      + terraform_labels = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+
+      + config {
+          + airflow_uri      = (known after apply)
+          + dag_gcs_prefix   = (known after apply)
+          + environment_size = "ENVIRONMENT_SIZE_SMALL"
+          + gke_cluster      = (known after apply)
+          + node_count       = (known after apply)
+          + resilience_mode  = "HIGH_RESILIENCE"
+
+          + data_retention_config (known after apply)
+
+          + database_config (known after apply)
+
+          + encryption_config (known after apply)
+
+          + maintenance_window (known after apply)
+
+          + node_config {
+              + disk_size_gb         = (known after apply)
+              + enable_ip_masq_agent = (known after apply)
+              + ip_allocation_policy = (known after apply)
+              + machine_type         = (known after apply)
+              + network              = "ifrs9-staging-core"
+              + oauth_scopes         = (known after apply)
+              + service_account      = (known after apply)
+              + subnetwork           = "ifrs9-staging-core-southamerica-east1-subnet"
+              + zone                 = (known after apply)
+            }
+
+          + private_environment_config {
+              + cloud_composer_connection_subnetwork   = (known after apply)
+              + cloud_composer_network_ipv4_cidr_block = "10.90.66.0/24"
+              + cloud_sql_ipv4_cidr_block              = "10.90.65.0/28"
+              + connection_type                        = "VPC_PEERING"
+              + enable_private_endpoint                = true
+              + enable_privately_used_public_ips       = (known after apply)
+              + master_ipv4_cidr_block                 = "10.90.64.0/28"
+              + web_server_ipv4_cidr_block             = (known after apply)
+            }
+
+          + software_config {
+              + airflow_config_overrides = {
+                  + "celery-worker_concurrency"           = "8"
+                  + "core-dags_are_paused_at_creation"    = "True"
+                  + "core-max_active_runs_per_dag"        = "2"
+                  + "email-email_backend"                 = "airflow.utils.email.send_email_smtp"
+                  + "scheduler-catchup_by_default"        = "False"
+                  + "scheduler-dag_dir_list_interval"     = "300"
+                  + "scheduler-max_threads"               = "2"
+                  + "webserver-worker_refresh_batch_size" = "1"
+                  + "webserver-worker_refresh_interval"   = "30s"
+                  + "webserver-worker_timeout"            = "180s"
+                }
+              + image_version            = "composer-2.6.5-airflow-2.6.3"
+              + python_version           = (known after apply)
+              + scheduler_count          = 1
+            }
+
+          + web_server_config (known after apply)
+
+          + web_server_network_access_control (known after apply)
+
+          + workloads_config {
+              + scheduler {
+                  + count      = (known after apply)
+                  + cpu        = 1
+                  + memory_gb  = 3
+                  + storage_gb = 20
+                }
+              + triggerer (known after apply)
+              + web_server {
+                  + cpu        = 1
+                  + memory_gb  = 2
+                  + storage_gb = 20
+                }
+              + worker {
+                  + cpu        = 1
+                  + max_count  = 3
+                  + memory_gb  = 4
+                  + min_count  = 1
+                  + storage_gb = 30
+                }
+            }
+        }
+
+      + storage_config (known after apply)
+
+      + timeouts {
+          + create = "90m"
+          + delete = "60m"
+          + update = "90m"
+        }
+    }
+
+  # module.dataproc.google_dataproc_autoscaling_policy.primary[0] will be created
+  + resource "google_dataproc_autoscaling_policy" "primary" {
+      + id        = (known after apply)
+      + location  = "southamerica-east1"
+      + name      = (known after apply)
+      + policy_id = "ifrs9-staging-dp-policy"
+      + project   = "academic-ocean-472500-j4"
+
+      + basic_algorithm {
+          + cooldown_period = "120s"
+
+          + yarn_config {
+              + graceful_decommission_timeout  = "3600s"
+              + scale_down_factor              = 0.4
+              + scale_down_min_worker_fraction = 0.2
+              + scale_up_factor                = 0.6
+              + scale_up_min_worker_fraction   = 0.2
+            }
+        }
+
+      + secondary_worker_config {
+          + max_instances = 4
+          + min_instances = 0
+          + weight        = 1
+        }
+
+      + worker_config {
+          + max_instances = 6
+          + min_instances = 2
+          + weight        = 1
+        }
+    }
+
+  # module.dataproc.google_dataproc_cluster.primary will be created
+  + resource "google_dataproc_cluster" "primary" {
+      + effective_labels              = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + graceful_decommission_timeout = "0s"
+      + id                            = (known after apply)
+      + labels                        = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + name                          = "ifrs9-staging-dp"
+      + project                       = "academic-ocean-472500-j4"
+      + region                        = "southamerica-east1"
+      + terraform_labels              = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+
+      + cluster_config {
+          + bucket      = (known after apply)
+          + temp_bucket = (known after apply)
+
+          + autoscaling_config {
+              + policy_uri = (known after apply)
+            }
+
+          + auxiliary_node_groups (known after apply)
+
+          + dataproc_metric_config (known after apply)
+
+          + endpoint_config (known after apply)
+
+          + gce_cluster_config {
+              + internal_ip_only       = true
+              + network                = (known after apply)
+              + service_account        = (known after apply)
+              + service_account_scopes = (known after apply)
+              + subnetwork             = "ifrs9-staging-core-southamerica-east1-subnet"
+              + zone                   = (known after apply)
+
+              + node_group_affinity (known after apply)
+
+              + reservation_affinity (known after apply)
+
+              + shielded_instance_config (known after apply)
+            }
+
+          + lifecycle_config {
+              + idle_delete_ttl = "604800s"
+              + idle_start_time = (known after apply)
+            }
+
+          + master_config {
+              + image_uri        = (known after apply)
+              + instance_names   = (known after apply)
+              + machine_type     = "e2-standard-4"
+              + min_cpu_platform = (known after apply)
+              + num_instances    = 1
+
+              + disk_config (known after apply)
+            }
+
+          + preemptible_worker_config (known after apply)
+
+          + software_config (known after apply)
+
+          + worker_config {
+              + image_uri         = (known after apply)
+              + instance_names    = (known after apply)
+              + machine_type      = "e2-standard-4"
+              + min_cpu_platform  = (known after apply)
+              + min_num_instances = (known after apply)
+              + num_instances     = 2
+
+              + disk_config (known after apply)
+            }
+        }
+
+      + virtual_cluster_config (known after apply)
+    }
+
+  # module.gke.google_container_cluster.primary will be created
+  + resource "google_container_cluster" "primary" {
+      + cluster_ipv4_cidr                        = (known after apply)
+      + datapath_provider                        = (known after apply)
+      + default_max_pods_per_node                = (known after apply)
+      + deletion_protection                      = false
+      + description                              = "IFRS9 staging GKE cluster"
+      + enable_cilium_clusterwide_network_policy = false
+      + enable_intranode_visibility              = (known after apply)
+      + enable_kubernetes_alpha                  = false
+      + enable_l4_ilb_subsetting                 = false
+      + enable_legacy_abac                       = false
+      + enable_multi_networking                  = false
+      + enable_shielded_nodes                    = true
+      + endpoint                                 = (known after apply)
+      + id                                       = (known after apply)
+      + initial_node_count                       = 1
+      + label_fingerprint                        = (known after apply)
+      + location                                 = "southamerica-east1"
+      + logging_service                          = (known after apply)
+      + master_version                           = (known after apply)
+      + monitoring_service                       = (known after apply)
+      + name                                     = "ifrs9-staging-gke"
+      + network                                  = "ifrs9-staging-core"
+      + networking_mode                          = (known after apply)
+      + node_locations                           = (known after apply)
+      + node_version                             = (known after apply)
+      + operation                                = (known after apply)
+      + private_ipv6_google_access               = (known after apply)
+      + project                                  = "academic-ocean-472500-j4"
+      + remove_default_node_pool                 = true
+      + resource_labels                          = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + self_link                                = (known after apply)
+      + services_ipv4_cidr                       = (known after apply)
+      + subnetwork                               = "ifrs9-staging-core-southamerica-east1-subnet"
+      + tpu_ipv4_cidr_block                      = (known after apply)
+
+      + addons_config {
+          + cloudrun_config (known after apply)
+          + config_connector_config (known after apply)
+          + dns_cache_config (known after apply)
+          + gce_persistent_disk_csi_driver_config (known after apply)
+          + gcp_filestore_csi_driver_config (known after apply)
+          + gcs_fuse_csi_driver_config (known after apply)
+          + gke_backup_agent_config {
+              + enabled = true
+            }
+          + horizontal_pod_autoscaling {
+              + disabled = false
+            }
+          + http_load_balancing {
+              + disabled = false
+            }
+          + network_policy_config (known after apply)
+          + ray_operator_config (known after apply)
+          + stateful_ha_config (known after apply)
+        }
+
+      + authenticator_groups_config (known after apply)
+
+      + cluster_autoscaling (known after apply)
+
+      + confidential_nodes (known after apply)
+
+      + cost_management_config (known after apply)
+
+      + database_encryption (known after apply)
+
+      + default_snat_status (known after apply)
+
+      + gateway_api_config (known after apply)
+
+      + identity_service_config (known after apply)
+
+      + ip_allocation_policy {
+          + cluster_ipv4_cidr_block       = (known after apply)
+          + cluster_secondary_range_name  = "ifrs9-staging-core-pods"
+          + services_ipv4_cidr_block      = (known after apply)
+          + services_secondary_range_name = "ifrs9-staging-core-services"
+          + stack_type                    = "IPV4"
+
+          + pod_cidr_overprovision_config (known after apply)
+        }
+
+      + logging_config {
+          + enable_components = [
+              + "SYSTEM_COMPONENTS",
+              + "WORKLOADS",
+            ]
+        }
+
+      + maintenance_policy {
+          + daily_maintenance_window {
+              + duration   = (known after apply)
+              + start_time = "03:00"
+            }
+        }
+
+      + master_auth (known after apply)
+
+      + master_authorized_networks_config (known after apply)
+
+      + mesh_certificates (known after apply)
+
+      + monitoring_config {
+          + enable_components = [
+              + "SYSTEM_COMPONENTS",
+              + "POD",
+              + "DEPLOYMENT",
+            ]
+
+          + advanced_datapath_observability_config (known after apply)
+
+          + managed_prometheus (known after apply)
+        }
+
+      + network_policy {
+          + enabled  = true
+          + provider = "CALICO"
+        }
+
+      + node_config (known after apply)
+
+      + node_pool (known after apply)
+
+      + node_pool_auto_config (known after apply)
+
+      + node_pool_defaults (known after apply)
+
+      + notification_config (known after apply)
+
+      + private_cluster_config {
+          + enable_private_endpoint = true
+          + enable_private_nodes    = true
+          + master_ipv4_cidr_block  = "10.90.48.0/28"
+          + peering_name            = (known after apply)
+          + private_endpoint        = (known after apply)
+          + public_endpoint         = (known after apply)
+
+          + master_global_access_config (known after apply)
+        }
+
+      + release_channel {
+          + channel = "REGULAR"
+        }
+
+      + security_posture_config (known after apply)
+
+      + service_external_ips_config (known after apply)
+
+      + vertical_pod_autoscaling (known after apply)
+
+      + workload_identity_config {
+          + workload_pool = "academic-ocean-472500-j4.svc.id.goog"
+        }
+    }
+
+  # module.gke.google_container_node_pool.primary will be created
+  + resource "google_container_node_pool" "primary" {
+      + cluster                     = "ifrs9-staging-gke"
+      + id                          = (known after apply)
+      + initial_node_count          = (known after apply)
+      + instance_group_urls         = (known after apply)
+      + location                    = "southamerica-east1"
+      + managed_instance_group_urls = (known after apply)
+      + max_pods_per_node           = (known after apply)
+      + name                        = "ifrs9-staging-gke-primary"
+      + name_prefix                 = (known after apply)
+      + node_count                  = (known after apply)
+      + node_locations              = (known after apply)
+      + operation                   = (known after apply)
+      + project                     = "academic-ocean-472500-j4"
+      + version                     = (known after apply)
+
+      + autoscaling {
+          + location_policy = (known after apply)
+          + max_node_count  = 2
+          + min_node_count  = 1
+        }
+
+      + management {
+          + auto_repair  = true
+          + auto_upgrade = true
+        }
+
+      + network_config (known after apply)
+
+      + node_config {
+          + disk_size_gb      = 80
+          + disk_type         = "pd-standard"
+          + effective_taints  = (known after apply)
+          + guest_accelerator = (known after apply)
+          + image_type        = (known after apply)
+          + labels            = {
+              + "environment" = "staging"
+            }
+          + local_ssd_count   = (known after apply)
+          + logging_variant   = (known after apply)
+          + machine_type      = "e2-standard-2"
+          + metadata          = {
+              + "disable-legacy-endpoints" = "true"
+            }
+          + min_cpu_platform  = (known after apply)
+          + oauth_scopes      = [
+              + "https://www.googleapis.com/auth/cloud-platform",
+            ]
+          + preemptible       = false
+          + service_account   = (known after apply)
+          + spot              = false
+          + tags              = [
+              + "ifrs9",
+              + "staging",
+            ]
+
+          + confidential_nodes (known after apply)
+
+          + gcfs_config (known after apply)
+
+          + kubelet_config (known after apply)
+
+          + shielded_instance_config {
+              + enable_integrity_monitoring = true
+              + enable_secure_boot          = true
+            }
+
+          + workload_metadata_config {
+              + mode = "GKE_METADATA"
+            }
+        }
+
+      + timeouts {
+          + create = "40m"
+          + delete = "40m"
+          + update = "60m"
+        }
+
+      + upgrade_settings {
+          + max_surge       = 1
+          + max_unavailable = 0
+          + strategy        = "SURGE"
+
+          + blue_green_settings (known after apply)
+        }
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["composer-roles-composer.worker"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/composer.worker"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["composer-roles-iam.serviceAccountUser"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/iam.serviceAccountUser"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["composer-roles-storage.objectAdmin"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/storage.objectAdmin"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["dataproc-roles-dataproc.editor"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/dataproc.editor"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["dataproc-roles-logging.logWriter"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/logging.logWriter"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["dataproc-roles-storage.objectAdmin"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/storage.objectAdmin"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["gke-roles-artifactregistry.reader"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/artifactregistry.reader"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["gke-roles-container.nodeServiceAccount"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/container.nodeServiceAccount"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["gke-roles-logging.logWriter"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/logging.logWriter"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["gke-roles-monitoring.metricWriter"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/monitoring.metricWriter"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["vertex-roles-aiplatform.user"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/aiplatform.user"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["vertex-roles-notebooks.admin"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/notebooks.admin"
+    }
+
+  # module.iam.google_project_iam_member.service_account_roles["vertex-roles-storage.objectViewer"] will be created
+  + resource "google_project_iam_member" "service_account_roles" {
+      + etag    = (known after apply)
+      + id      = (known after apply)
+      + member  = (known after apply)
+      + project = "academic-ocean-472500-j4"
+      + role    = "roles/storage.objectViewer"
+    }
+
+  # module.iam.google_service_account.service_accounts["composer"] will be created
+  + resource "google_service_account" "service_accounts" {
+      + account_id   = "ifrs9-staging-composer"
+      + disabled     = false
+      + display_name = "IFRS9 staging composer service account"
+      + email        = (known after apply)
+      + id           = (known after apply)
+      + member       = (known after apply)
+      + name         = (known after apply)
+      + project      = "academic-ocean-472500-j4"
+      + unique_id    = (known after apply)
+    }
+
+  # module.iam.google_service_account.service_accounts["dataproc"] will be created
+  + resource "google_service_account" "service_accounts" {
+      + account_id   = "ifrs9-staging-dataproc"
+      + disabled     = false
+      + display_name = "IFRS9 staging dataproc service account"
+      + email        = (known after apply)
+      + id           = (known after apply)
+      + member       = (known after apply)
+      + name         = (known after apply)
+      + project      = "academic-ocean-472500-j4"
+      + unique_id    = (known after apply)
+    }
+
+  # module.iam.google_service_account.service_accounts["gke"] will be created
+  + resource "google_service_account" "service_accounts" {
+      + account_id   = "ifrs9-staging-gke"
+      + disabled     = false
+      + display_name = "IFRS9 staging gke service account"
+      + email        = (known after apply)
+      + id           = (known after apply)
+      + member       = (known after apply)
+      + name         = (known after apply)
+      + project      = "academic-ocean-472500-j4"
+      + unique_id    = (known after apply)
+    }
+
+  # module.iam.google_service_account.service_accounts["vertex"] will be created
+  + resource "google_service_account" "service_accounts" {
+      + account_id   = "ifrs9-staging-vertex"
+      + disabled     = false
+      + display_name = "IFRS9 staging vertex service account"
+      + email        = (known after apply)
+      + id           = (known after apply)
+      + member       = (known after apply)
+      + name         = (known after apply)
+      + project      = "academic-ocean-472500-j4"
+      + unique_id    = (known after apply)
+    }
+
+  # module.kms.google_kms_crypto_key.bigquery will be created
+  + resource "google_kms_crypto_key" "bigquery" {
+      + crypto_key_backend         = (known after apply)
+      + destroy_scheduled_duration = (known after apply)
+      + effective_labels           = (known after apply)
+      + id                         = (known after apply)
+      + import_only                = (known after apply)
+      + key_ring                   = (known after apply)
+      + name                       = "bigquery-default"
+      + primary                    = (known after apply)
+      + purpose                    = "ENCRYPT_DECRYPT"
+      + rotation_period            = "7776000s"
+      + terraform_labels           = (known after apply)
+
+      + version_template (known after apply)
+    }
+
+  # module.kms.google_kms_crypto_key.compute will be created
+  + resource "google_kms_crypto_key" "compute" {
+      + crypto_key_backend         = (known after apply)
+      + destroy_scheduled_duration = (known after apply)
+      + effective_labels           = (known after apply)
+      + id                         = (known after apply)
+      + import_only                = (known after apply)
+      + key_ring                   = (known after apply)
+      + name                       = "compute-default"
+      + primary                    = (known after apply)
+      + purpose                    = "ENCRYPT_DECRYPT"
+      + rotation_period            = "7776000s"
+      + terraform_labels           = (known after apply)
+
+      + version_template (known after apply)
+    }
+
+  # module.kms.google_kms_crypto_key.storage will be created
+  + resource "google_kms_crypto_key" "storage" {
+      + crypto_key_backend         = (known after apply)
+      + destroy_scheduled_duration = (known after apply)
+      + effective_labels           = (known after apply)
+      + id                         = (known after apply)
+      + import_only                = (known after apply)
+      + key_ring                   = (known after apply)
+      + name                       = "storage-default"
+      + primary                    = (known after apply)
+      + purpose                    = "ENCRYPT_DECRYPT"
+      + rotation_period            = "7776000s"
+      + terraform_labels           = (known after apply)
+
+      + version_template (known after apply)
+    }
+
+  # module.kms.google_kms_key_ring.core will be created
+  + resource "google_kms_key_ring" "core" {
+      + id       = (known after apply)
+      + location = "southamerica-east1"
+      + name     = "ifrs9-staging-keys"
+      + project  = "academic-ocean-472500-j4"
+    }
+
+  # module.load_balancer.google_compute_backend_bucket.backends["portfolio"] will be created
+  + resource "google_compute_backend_bucket" "backends" {
+      + bucket_name        = "ifrs9-academic-ocean-472500-j4-staging-artifacts"
+      + creation_timestamp = (known after apply)
+      + description        = "IFRS9 portfolio frontend"
+      + enable_cdn         = true
+      + id                 = (known after apply)
+      + name               = "ifrs9-staging-lb-portfolio"
+      + project            = "academic-ocean-472500-j4"
+      + self_link          = (known after apply)
+
+      + cdn_policy (known after apply)
+    }
+
+  # module.load_balancer.google_compute_global_address.external will be created
+  + resource "google_compute_global_address" "external" {
+      + address            = (known after apply)
+      + creation_timestamp = (known after apply)
+      + description        = "Global IP for IFRS9 staging external entrypoint"
+      + effective_labels   = (known after apply)
+      + id                 = (known after apply)
+      + label_fingerprint  = (known after apply)
+      + name               = "ifrs9-staging-lb-ip"
+      + prefix_length      = (known after apply)
+      + project            = "academic-ocean-472500-j4"
+      + self_link          = (known after apply)
+      + terraform_labels   = (known after apply)
+    }
+
+  # module.load_balancer.google_compute_global_forwarding_rule.http will be created
+  + resource "google_compute_global_forwarding_rule" "http" {
+      + base_forwarding_rule  = (known after apply)
+      + effective_labels      = (known after apply)
+      + id                    = (known after apply)
+      + ip_address            = (known after apply)
+      + ip_protocol           = (known after apply)
+      + label_fingerprint     = (known after apply)
+      + load_balancing_scheme = "EXTERNAL"
+      + name                  = "ifrs9-staging-lb-http-rule"
+      + network               = (known after apply)
+      + port_range            = "80"
+      + project               = "academic-ocean-472500-j4"
+      + psc_connection_id     = (known after apply)
+      + psc_connection_status = (known after apply)
+      + self_link             = (known after apply)
+      + subnetwork            = (known after apply)
+      + target                = (known after apply)
+      + terraform_labels      = (known after apply)
+
+      + service_directory_registrations (known after apply)
+    }
+
+  # module.load_balancer.google_compute_target_http_proxy.http will be created
+  + resource "google_compute_target_http_proxy" "http" {
+      + creation_timestamp = (known after apply)
+      + id                 = (known after apply)
+      + name               = "ifrs9-staging-lb-http-proxy"
+      + project            = "academic-ocean-472500-j4"
+      + proxy_bind         = (known after apply)
+      + proxy_id           = (known after apply)
+      + self_link          = (known after apply)
+      + url_map            = (known after apply)
+    }
+
+  # module.load_balancer.google_compute_url_map.default will be created
+  + resource "google_compute_url_map" "default" {
+      + creation_timestamp = (known after apply)
+      + default_service    = (known after apply)
+      + fingerprint        = (known after apply)
+      + id                 = (known after apply)
+      + map_id             = (known after apply)
+      + name               = "ifrs9-staging-lb-urlmap"
+      + project            = "academic-ocean-472500-j4"
+      + self_link          = (known after apply)
+    }
+
+  # module.monitoring.null_resource.monitoring_placeholder will be created
+  + resource "null_resource" "monitoring_placeholder" {
+      + id       = (known after apply)
+      + triggers = {
+          + "environment" = "staging"
+          + "project"     = "academic-ocean-472500-j4"
+        }
+    }
+
+  # module.vertex_ai.google_workbench_instance.primary will be created
+  + resource "google_workbench_instance" "primary" {
+      + create_time          = (known after apply)
+      + creator              = (known after apply)
+      + desired_state        = "RUNNING"
+      + disable_proxy_access = false
+      + effective_labels     = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + health_info          = (known after apply)
+      + health_state         = (known after apply)
+      + id                   = (known after apply)
+      + instance_owners      = []
+      + labels               = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + location             = "southamerica-east1-b"
+      + name                 = "ifrs9-staging-wb"
+      + project              = "academic-ocean-472500-j4"
+      + proxy_uri            = (known after apply)
+      + state                = (known after apply)
+      + terraform_labels     = {
+          + "environment" = "staging"
+          + "managed_by"  = "terraform"
+          + "project"     = "ifrs9-risk-system"
+        }
+      + update_time          = (known after apply)
+      + upgrade_history      = (known after apply)
+
+      + gce_setup {
+          + disable_public_ip = (known after apply)
+          + machine_type      = "e2-standard-2"
+          + metadata          = (known after apply)
+          + tags              = (known after apply)
+
+          + boot_disk {
+              + disk_encryption = (known after apply)
+              + disk_size_gb    = "100"
+              + disk_type       = "PD_SSD"
+            }
+
+          + data_disks (known after apply)
+
+          + network_interfaces {
+              + network  = (known after apply)
+              + nic_type = "GVNIC"
+              + subnet   = (known after apply)
+
+              + access_configs (known after apply)
+            }
+
+          + service_accounts {
+              + email  = (known after apply)
+              + scopes = (known after apply)
+            }
+
+          + shielded_instance_config {
+              + enable_integrity_monitoring = true
+              + enable_secure_boot          = true
+              + enable_vtpm                 = true
+            }
+
+          + vm_image {
+              + family  = "common-cpu-notebooks"
+              + project = "deeplearning-platform-release"
+            }
+        }
+
+      + timeouts {
+          + create = "120m"
+          + delete = "60m"
+          + update = "120m"
+        }
+    }
+
+  # module.vpc.google_compute_network.primary will be created
+  + resource "google_compute_network" "primary" {
+      + auto_create_subnetworks                   = false
+      + delete_default_routes_on_create           = false
+      + description                               = "IFRS9 core VPC for staging"
+      + gateway_ipv4                              = (known after apply)
+      + id                                        = (known after apply)
+      + internal_ipv6_range                       = (known after apply)
+      + mtu                                       = (known after apply)
+      + name                                      = "ifrs9-staging-core"
+      + network_firewall_policy_enforcement_order = "AFTER_CLASSIC_FIREWALL"
+      + numeric_id                                = (known after apply)
+      + project                                   = "academic-ocean-472500-j4"
+      + routing_mode                              = (known after apply)
+      + self_link                                 = (known after apply)
+    }
+
+  # module.vpc.google_compute_subnetwork.primary will be created
+  + resource "google_compute_subnetwork" "primary" {
+      + creation_timestamp         = (known after apply)
+      + description                = "Primary subnet for IFRS9 staging"
+      + external_ipv6_prefix       = (known after apply)
+      + fingerprint                = (known after apply)
+      + gateway_address            = (known after apply)
+      + id                         = (known after apply)
+      + internal_ipv6_prefix       = (known after apply)
+      + ip_cidr_range              = "10.90.0.0/20"
+      + ipv6_cidr_range            = (known after apply)
+      + name                       = "ifrs9-staging-core-southamerica-east1-subnet"
+      + network                    = (known after apply)
+      + private_ip_google_access   = (known after apply)
+      + private_ipv6_google_access = (known after apply)
+      + project                    = "academic-ocean-472500-j4"
+      + purpose                    = (known after apply)
+      + region                     = "southamerica-east1"
+      + secondary_ip_range         = [
+          + {
+              + ip_cidr_range = "10.90.32.0/21"
+              + range_name    = "ifrs9-staging-core-pods"
+            },
+          + {
+              + ip_cidr_range = "10.90.40.0/22"
+              + range_name    = "ifrs9-staging-core-services"
+            },
+        ]
+      + self_link                  = (known after apply)
+      + stack_type                 = (known after apply)
+    }
+
+Plan: 59 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + api_endpoints        = {
+      + bigquery   = "https://bigquery.googleapis.com/bigquery/v2/projects/academic-ocean-472500-j4"
+      + logging    = "https://logging.googleapis.com/v2/projects/academic-ocean-472500-j4"
+      + monitoring = "https://monitoring.googleapis.com/v1/projects/academic-ocean-472500-j4"
+      + storage    = "https://storage.googleapis.com/storage/v1/b"
+      + vertex_ai  = "https://southamerica-east1-aiplatform.googleapis.com"
+    }
+  + bigquery_datasets    = {
+      + analytics_dataset = "ifrs9_analytics_staging"
+      + ml_dataset        = "ifrs9_ml_staging"
+      + processed_dataset = "ifrs9_processed_staging"
+      + raw_dataset       = "ifrs9_raw_staging"
+    }
+  + composer_environment = {
+      + airflow_uri      = (known after apply)
+      + dag_folder       = (known after apply)
+      + environment_name = "ifrs9-staging-composer"
+      + gcs_bucket       = (known after apply)
+    }
+  + connection_strings   = {
+      + bigquery_project    = "academic-ocean-472500-j4"
+      + dataproc_endpoint   = "southamerica-east1-dataproc.googleapis.com"
+      + monitoring_endpoint = "monitoring.googleapis.com"
+      + storage_endpoint    = "storage.googleapis.com"
+      + vertex_ai_endpoint  = "southamerica-east1-aiplatform.googleapis.com"
+    }
+  + cost_optimization    = {
+      + auto_scaling_enabled    = {
+          + dataproc = true
+          + gke      = true
+        }
+      + preemptible_nodes       = false
+      + resource_quotas         = {
+          + bigquery_slots   = 500
+          + composer_nodes   = 5
+          + storage_quota_gb = 5000
+          + vertex_ai_nodes  = 3
+        }
+      + storage_lifecycle_rules = 3
+    }
+  + dataproc_cluster     = {
+      + cluster_name             = "ifrs9-staging-dp"
+      + master_instance_name     = (known after apply)
+      + spark_history_server_url = (known after apply)
+    }
+  + deployment_info      = {
+      + deployment_timestamp = (known after apply)
+      + next_steps           = [
+          + "1. Configure kubectl: gcloud container clusters get-credentials ifrs9-staging-gke --region southamerica-east1 --project academic-ocean-472500-j4",
+          + "2. Deploy application manifests: kubectl apply -f k8s/",
+          + (known after apply),
+          + "4. Configure monitoring dashboards",
+          + "5. Set up CI/CD pipeline secrets",
+        ]
+      + terraform_version    = ">=1.0"
+    }
+  + environment          = "staging"
+  + environment_config   = {
+      + backup_config    = {
+          + backup_window_hours = [
+              + 2,
+              + 4,
+            ]
+          + frequency           = "daily"
+          + retention_days      = 30
+        }
+      + data_retention   = {
+          + log_data_days       = 30
+          + model_data_days     = 365
+          + processed_data_days = 180
+          + raw_data_days       = 90
+        }
+      + network_security = {
+          + allowed_ip_ranges     = [
+              + "10.0.0.0/8",
+            ]
+          + authorized_networks   = []
+          + enable_network_policy = true
+          + enable_private_nodes  = true
+        }
+      + resource_sizing  = {
+          + bigquery_slots   = 500
+          + composer_nodes   = 5
+          + storage_quota_gb = 5000
+          + vertex_ai_nodes  = 3
+        }
+    }
+  + gke_cluster          = (sensitive value)
+  + kms_keys             = {
+      + bigquery_key = (known after apply)
+      + compute_key  = (known after apply)
+      + storage_key  = (known after apply)
+    }
+  + load_balancer        = {
+      + backend_bucket_names = {
+          + portfolio = "ifrs9-staging-lb-portfolio"
+        }
+      + certificate_name     = null
+      + external_ip          = (known after apply)
+      + http_rule            = (known after apply)
+      + https_rule           = null
+    }
+  + monitoring           = {
+      + alerting_policies     = [
+          + "ifrs9-staging-pipeline-failure",
+          + "ifrs9-staging-sla-breach",
+        ]
+      + dashboard_urls        = [
+          + "https://monitoring.cloud.google.com/dashboards/ifrs9-overview",
+          + "https://monitoring.cloud.google.com/dashboards/ifrs9-technical",
+        ]
+      + notification_channels = []
+    }
+  + project_id           = "academic-ocean-472500-j4"
+  + region               = "southamerica-east1"
+  + security_config      = {
+      + audit_logs_enabled           = true
+      + iam_service_accounts_created = 4
+      + kms_encryption_enabled       = true
+      + network_policies_enabled     = true
+      + private_networks_enabled     = true
+    }
+  + service_accounts     = {
+      + composer = (known after apply)
+      + dataproc = (known after apply)
+      + gke      = (known after apply)
+      + vertex   = (known after apply)
+    }
+  + storage_buckets      = {
+      + artifacts = "ifrs9-academic-ocean-472500-j4-staging-artifacts"
+      + backups   = "ifrs9-academic-ocean-472500-j4-staging-backups"
+      + models    = "ifrs9-academic-ocean-472500-j4-staging-models"
+      + processed = "ifrs9-academic-ocean-472500-j4-staging-processed"
+      + raw_data  = "ifrs9-academic-ocean-472500-j4-staging-raw"
+    }
+  + vertex_ai            = {
+      + model_registry_location  = "southamerica-east1"
+      + pipeline_service_account = (known after apply)
+      + workbench_instance_name  = "ifrs9-staging-wb"
+      + workbench_location       = "southamerica-east1-b"
+    }
+  + vpc_network          = {
+      + name        = "ifrs9-staging-core"
+      + self_link   = (known after apply)
+      + subnet_cidr = "10.90.0.0/20"
+      + subnet_name = "ifrs9-staging-core-southamerica-east1-subnet"
+    }

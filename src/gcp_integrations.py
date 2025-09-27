@@ -8,14 +8,21 @@ Supports local development mode with environment variable GCP_ENABLED=false
 to use local alternatives (PostgreSQL, file system, etc.)
 """
 
+from __future__ import annotations
+
 import os
 import json
 import logging
 import sqlite3
+import inspect
 from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
+
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
 
 # GCP imports only when enabled
 GCP_ENABLED = os.getenv('GCP_ENABLED', 'false').lower() == 'true'
@@ -28,13 +35,14 @@ if GCP_ENABLED:
         from google.api_core import retry
         import pyarrow as pa
         import pyarrow.parquet as pq
-    except ImportError as e:
-        logger.warning(f"GCP dependencies not available: {e}. Using local fallbacks.")
+    except ImportError as exc:
+        logger.warning("GCP dependencies not available: %s. Using local fallbacks.", exc)
         GCP_ENABLED = False
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+        bigquery = storage = dataproc_v1 = service_account = retry = None
+        NotFound = Conflict = Exception
+else:
+    bigquery = storage = dataproc_v1 = service_account = retry = None
+    NotFound = Conflict = Exception
 
 class GCPIntegration:
     """Main class for GCP service integrations with local fallback support"""
@@ -54,6 +62,11 @@ class GCPIntegration:
         self.gcp_enabled = GCP_ENABLED
         self.project_id = project_id
         self.location = location
+        self.credentials = None
+        self.bigquery_client = None
+        self.storage_client = None
+        self.dataproc_client = None
+        self.is_local = self._detect_environment()
 
         if self.gcp_enabled:
             if not project_id:
@@ -61,9 +74,7 @@ class GCPIntegration:
             self.credentials = self._load_credentials(credentials_path)
 
             # Initialize GCP clients
-            self.bigquery_client = None
-            self.storage_client = None
-            self.dataproc_client = None
+            logger.info("GCP integration enabled for project %s in %s", project_id, self.location)
         else:
             logger.info("GCP integration disabled. Using local alternatives.")
             # Local fallback configuration
@@ -126,22 +137,20 @@ class GCPIntegration:
 
     def get_environment_info(self) -> Dict[str, Any]:
         """Get current environment configuration info"""
-        return {
+        info = {
             "gcp_enabled": self.gcp_enabled,
             "project_id": self.project_id if self.gcp_enabled else None,
             "location": self.location if self.gcp_enabled else None,
-            "local_db_path": self.local_db_path if not self.gcp_enabled else None,
-            "local_storage_path": str(self.local_storage_path) if not self.gcp_enabled else None
+            "local_db_path": getattr(self, "local_db_path", None) if not self.gcp_enabled else None,
+            "local_storage_path": str(getattr(self, "local_storage_path", "")) if not self.gcp_enabled else None,
+            "is_local": self.is_local,
         }
-        
-        # Environment detection
-        self.is_local = self._detect_environment()
-        
-        logger.info(f"GCP Integration initialized for project: {project_id}")
-        logger.info(f"Running in {'local' if self.is_local else 'cloud'} environment")
+        return info
     
     def _load_credentials(self, credentials_path: Optional[str]) -> Optional[service_account.Credentials]:
         """Load service account credentials"""
+        if service_account is None:
+            return None
         if credentials_path and os.path.exists(credentials_path):
             return service_account.Credentials.from_service_account_file(credentials_path)
         elif os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
@@ -166,9 +175,38 @@ class BigQueryManager(GCPIntegration):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bigquery_client = bigquery.Client(
-            project=self.project_id,
-            credentials=self.credentials
+        self._query_signature_cache = None
+        if self.gcp_enabled:
+            self.bigquery_client = bigquery.Client(
+                project=self.project_id,
+                credentials=self.credentials
+            )
+        else:
+            self.bigquery_client = None
+
+    def _ensure_bigquery_client(self):
+        if not self.gcp_enabled:
+            raise RuntimeError("BigQuery manager requires GCP_ENABLED=true")
+        if self.bigquery_client is None:
+            self.bigquery_client = bigquery.Client(
+                project=self.project_id,
+                credentials=self.credentials
+            )
+            self._query_signature_cache = None
+        return self.bigquery_client
+
+    def _supports_query_kwarg(self, param_name: str) -> bool:
+        if not self.gcp_enabled:
+            return False
+        if self._query_signature_cache is None:
+            try:
+                client = self._ensure_bigquery_client()
+                self._query_signature_cache = inspect.signature(client.query)
+            except (TypeError, ValueError):
+                self._query_signature_cache = None
+        return bool(
+            self._query_signature_cache
+            and param_name in self._query_signature_cache.parameters
         )
     
     def create_dataset(self, 
@@ -207,6 +245,9 @@ class BigQueryManager(GCPIntegration):
             logger.info(f"Created dataset {dataset_ref}")
             return True
             
+        except Conflict:
+            logger.info(f"Dataset {dataset_id} already exists (conflict detected)")
+            return True
         except Exception as e:
             logger.error(f"Failed to create dataset {dataset_id}: {str(e)}")
             return False
@@ -247,15 +288,23 @@ class BigQueryManager(GCPIntegration):
             logger.info(f"Created table {table_ref}")
             return True
             
+        except Conflict:
+            logger.info(f"Table {table_id} already exists (conflict detected)")
+            return True
         except Exception as e:
             logger.error(f"Failed to create table {table_id}: {str(e)}")
             return False
     
-    def upload_dataframe(self, 
-                        df: pd.DataFrame,
-                        dataset_id: str,
-                        table_id: str,
-                        write_disposition: str = "WRITE_TRUNCATE") -> bool:
+    def upload_dataframe(
+        self,
+        df: pd.DataFrame,
+        dataset_id: str,
+        table_id: str,
+        write_disposition: str = "WRITE_TRUNCATE",
+        *,
+        job_id: Optional[str] = None,
+        retry_config: Optional[Any] = None,
+    ) -> bool:
         """
         Upload pandas DataFrame to BigQuery
         
@@ -264,46 +313,117 @@ class BigQueryManager(GCPIntegration):
             dataset_id: Dataset identifier
             table_id: Table identifier
             write_disposition: Write mode (WRITE_TRUNCATE, WRITE_APPEND, WRITE_EMPTY)
+            job_id: Optional explicit job ID for idempotent load jobs
+            retry_config: Optional google.api_core.retry.Retry configuration
             
         Returns:
             bool: Success status
         """
         try:
+            client = self._ensure_bigquery_client()
             table_ref = f"{self.project_id}.{dataset_id}.{table_id}"
-            
+
             job_config = bigquery.LoadJobConfig(
                 write_disposition=write_disposition,
                 autodetect=True
             )
-            
-            job = self.bigquery_client.load_table_from_dataframe(
-                df, table_ref, job_config=job_config
+
+            load_kwargs = {}
+            if retry_config is not None:
+                load_kwargs["retry"] = retry_config
+            if job_id is not None:
+                load_kwargs["job_id"] = job_id
+
+            job = client.load_table_from_dataframe(
+                df,
+                table_ref,
+                job_config=job_config,
+                **load_kwargs
             )
-            
+
             job.result()  # Wait for job completion
-            
-            logger.info(f"Uploaded {len(df)} rows to {table_ref}")
+
+            logger.info(
+                "Uploaded %s rows to %s%s",
+                len(df),
+                table_ref,
+                f" (job_id={job_id})" if job_id else ""
+            )
             return True
-            
+
+        except Conflict:
+            logger.info(
+                "Load job %s already completed for %s; treating as success",
+                job_id or "<unknown>",
+                table_id
+            )
+            return True
         except Exception as e:
             logger.error(f"Failed to upload data to {table_id}: {str(e)}")
             return False
-    
-    def query_to_dataframe(self, query: str) -> Optional[pd.DataFrame]:
-        """
-        Execute BigQuery query and return as DataFrame
-        
+
+    def query_to_dataframe(
+        self,
+        query: str,
+        *,
+        job_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        retry_config: Optional[Any] = None,
+        job_config: Optional[Any] = None,
+    ) -> Optional[pd.DataFrame]:
+        """Execute BigQuery query and return results as a DataFrame.
+
         Args:
-            query: SQL query string
-            
+            query: SQL query string.
+            job_id: Optional explicit job ID for the query job.
+            request_id: Optional request identifier when using the `jobs.query` API.
+            retry_config: Optional retry configuration object.
+            job_config: Optional `google.cloud.bigquery.job.QueryJobConfig`.
+
         Returns:
-            pd.DataFrame or None: Query results
+            pd.DataFrame or None: Query results if successful; otherwise ``None``.
         """
         try:
-            df = self.bigquery_client.query(query).to_dataframe()
-            logger.info(f"Query returned {len(df)} rows")
+            client = self._ensure_bigquery_client()
+            query_kwargs: Dict[str, Any] = {}
+
+            if retry_config is not None:
+                query_kwargs["retry"] = retry_config
+            if job_id is not None:
+                query_kwargs["job_id"] = job_id
+
+            if request_id and self._supports_query_kwarg("request_id"):
+                query_kwargs["request_id"] = request_id
+                if self._supports_query_kwarg("api_method"):
+                    query_kwargs.setdefault("api_method", "jobs.query")
+
+            try:
+                query_job = client.query(
+                    query,
+                    job_config=job_config,
+                    **query_kwargs,
+                )
+            except TypeError as exc:
+                # Gracefully handle clients that do not yet support request_id/api_method
+                if request_id and "request_id" in str(exc):
+                    query_kwargs.pop("request_id", None)
+                    query_kwargs.pop("api_method", None)
+                    query_job = client.query(
+                        query,
+                        job_config=job_config,
+                        **query_kwargs,
+                    )
+                else:
+                    raise
+
+            df = query_job.to_dataframe()
+            logger.info(
+                "Query returned %s rows%s",
+                len(df),
+                f" (request_id={request_id})" if request_id else ""
+            )
             return df
-            
+
         except Exception as e:
             logger.error(f"Query failed: {str(e)}")
             return None
@@ -399,6 +519,9 @@ class CloudStorageManager(GCPIntegration):
             logger.info(f"Created bucket {bucket_name}")
             return True
             
+        except Conflict:
+            logger.info(f"Bucket {bucket_name} already exists (conflict detected)")
+            return True
         except Exception as e:
             logger.error(f"Failed to create bucket {bucket_name}: {str(e)}")
             return False
@@ -552,9 +675,13 @@ class DataprocManager(GCPIntegration):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.dataproc_client = dataproc_v1.ClusterControllerClient(
-            credentials=self.credentials
-        )
+        self._local_clusters: Dict[str, Dict[str, Any]] = {}
+        if self.gcp_enabled:
+            self.dataproc_client = dataproc_v1.ClusterControllerClient(
+                credentials=self.credentials
+            )
+        else:
+            self.dataproc_client = None
     
     def provision_dataproc_cluster(self, 
                                   cluster_name: str,
@@ -576,9 +703,24 @@ class DataprocManager(GCPIntegration):
             bool: Success status
         """
         try:
-            # Check if cluster exists
+            if not self.gcp_enabled:
+                if cluster_name in self._local_clusters:
+                    logger.info("Local Dataproc cluster %s already exists", cluster_name)
+                    return True
+
+                self._local_clusters[cluster_name] = {
+                    "worker_count": worker_count,
+                    "machine_type": machine_type,
+                    "disk_size": disk_size,
+                    "preemptible_workers": preemptible_workers,
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+                logger.info("Provisioned local Dataproc cluster: %s", cluster_name)
+                return True
+
+            # Check if cluster exists in GCP
             try:
-                cluster = self.dataproc_client.get_cluster(
+                self.dataproc_client.get_cluster(
                     request={
                         "project_id": self.project_id,
                         "region": self.location,
@@ -589,8 +731,7 @@ class DataprocManager(GCPIntegration):
                 return True
             except NotFound:
                 pass
-            
-            # Cluster configuration
+
             cluster_config = {
                 "project_id": self.project_id,
                 "cluster_name": cluster_name,
@@ -619,8 +760,7 @@ class DataprocManager(GCPIntegration):
                     }
                 }
             }
-            
-            # Add preemptible workers if specified
+
             if preemptible_workers > 0:
                 cluster_config["config"]["preemptible_worker_config"] = {
                     "num_instances": preemptible_workers,
@@ -630,8 +770,7 @@ class DataprocManager(GCPIntegration):
                         "boot_disk_size_gb": disk_size
                     }
                 }
-            
-            # Create cluster
+
             operation = self.dataproc_client.create_cluster(
                 request={
                     "project_id": self.project_id,
@@ -639,11 +778,11 @@ class DataprocManager(GCPIntegration):
                     "cluster": cluster_config
                 }
             )
-            
-            result = operation.result(timeout=900)  # 15 minutes timeout
+
+            operation.result(timeout=900)  # 15 minutes timeout
             logger.info(f"Created Dataproc cluster: {cluster_name}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to create Dataproc cluster: {str(e)}")
             return False
@@ -659,6 +798,14 @@ class DataprocManager(GCPIntegration):
             bool: Success status
         """
         try:
+            if not self.gcp_enabled:
+                if cluster_name not in self._local_clusters:
+                    logger.error("Local Dataproc cluster %s not found", cluster_name)
+                    return False
+                del self._local_clusters[cluster_name]
+                logger.info("Deleted local Dataproc cluster: %s", cluster_name)
+                return True
+
             operation = self.dataproc_client.delete_cluster(
                 request={
                     "project_id": self.project_id,
@@ -666,11 +813,11 @@ class DataprocManager(GCPIntegration):
                     "cluster_name": cluster_name
                 }
             )
-            
+
             operation.result(timeout=300)  # 5 minutes timeout
             logger.info(f"Deleted Dataproc cluster: {cluster_name}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to delete Dataproc cluster: {str(e)}")
             return False

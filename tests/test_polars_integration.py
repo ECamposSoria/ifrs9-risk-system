@@ -290,7 +290,7 @@ class TestPolarsIFRS9Specific:
         result = (pl_df
                  .with_columns([
                      # Calculate remaining term in months
-                     ((pl.col('maturity_date') - pl.col('origination_date')).dt.days() / 30)
+                    ((pl.col('maturity_date') - pl.col('origination_date')).dt.total_days() / 30)
                      .alias('remaining_term_months'),
                      # Calculate monthly payment approximation
                      (pl.col('balance') * pl.col('interest_rate') / 12)
@@ -307,7 +307,7 @@ class TestPolarsIFRS9Specific:
                      pl.col('balance').sum().alias('total_exposure'),
                      pl.col('balance').mean().alias('avg_balance'),
                      pl.col('interest_rate').mean().alias('avg_rate'),
-                     pl.count().alias('loan_count')
+                    pl.len().alias('loan_count')
                  ])
                  .sort(['rating', 'total_exposure'], descending=[False, True]))
         

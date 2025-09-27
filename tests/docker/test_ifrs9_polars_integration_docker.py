@@ -30,26 +30,27 @@ warnings.filterwarnings('ignore')
 
 # Create synthetic IFRS9-like features
 N=6000
+idx = np.arange(N)
 raw = pl.DataFrame({
-  'loan_amount': (pl.arange(0,N)+1000).cast(pl.Float64),
-  'interest_rate': (pl.arange(0,N)%9)/100+0.02,
-  'term_months': (pl.arange(0,N)%60)+12,
-  'current_balance': (pl.arange(0,N)+500).cast(pl.Float64),
-  'credit_score': ((pl.arange(0,N)%500)+300).cast(pl.Int64),
-  'days_past_due': (pl.arange(0,N)%120).cast(pl.Int64),
-  'customer_income': (pl.arange(0,N)%10000+2000).cast(pl.Float64),
-  'ltv_ratio': ((pl.arange(0,N)%50)/100).cast(pl.Float64),
-  'monthly_payment': ((pl.arange(0,N)%2000)/10).cast(pl.Float64),
-  'loan_type': (pl.arange(0,N)%4).cast(pl.Int64).cast(pl.Utf8),
-  'employment_status': (pl.arange(0,N)%4).cast(pl.Int64).cast(pl.Utf8),
-  'label': ((pl.arange(0,N)%2)==0).cast(pl.Int64)
+  'loan_amount': (idx + 1000).astype(float),
+  'interest_rate': (idx % 9) / 100 + 0.02,
+  'term_months': (idx % 60) + 12,
+  'current_balance': (idx + 500).astype(float),
+  'credit_score': ((idx % 500) + 300).astype(int),
+  'days_past_due': (idx % 120).astype(int),
+  'customer_income': (idx % 10000 + 2000).astype(float),
+  'ltv_ratio': ((idx % 50) / 100).astype(float),
+  'monthly_payment': ((idx % 2000) / 10).astype(float),
+  'loan_type': (idx % 4).astype(str),
+  'employment_status': (idx % 4).astype(str)
 })
 
 # Simple Polars FE
 feat = raw.with_columns([
   (pl.col('loan_amount')/pl.col('customer_income')).alias('dti'),
   (pl.col('current_balance')/pl.col('loan_amount')).alias('util'),
-  (pl.col('interest_rate')*pl.col('loan_amount')).alias('int_cost')
+  (pl.col('interest_rate')*pl.col('loan_amount')).alias('int_cost'),
+  (((pl.col('loan_amount')/pl.col('customer_income'))*1.5 + (pl.col('current_balance')/pl.col('loan_amount'))) > 1.2).cast(pl.Int64).alias('label')
 ])
 pdf = feat.select(['dti','util','int_cost','label']).to_pandas()
 X = pdf[['dti','util','int_cost']]; y = pdf['label']
@@ -82,4 +83,3 @@ spark.stop()
     assert rc == 0, f"Spark visibility failed: {err or out}"
     kv = dict([ln.split("=",1) for ln in out.strip().splitlines() if "=" in ln])
     assert kv.get("spark_ok") == "1"
-

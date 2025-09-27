@@ -22,6 +22,7 @@ from tests.docker.conftest import docker_exec_python
 def test_expected_env_variables_present(container: str, keys, docker_containers, polars_env):
     if container not in docker_containers:
         pytest.skip(f"{container} not running")
+
     code = """
 import os
 print(";".join([f"{k}={os.getenv(k,'')}" for k in ['KEYS_PLACEHOLDER']]))
