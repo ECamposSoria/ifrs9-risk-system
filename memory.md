@@ -1,13 +1,13 @@
 # System Memory
 
-## Last Updated: 2025-09-28 05:52 UTC
-## Version: 0.8.4
+## Last Updated: 2025-09-28 07:33 UTC
+## Version: 0.8.5
 
-### Current Architecture
-- Terraform staging stack under `deploy/terraform` enables required Google APIs, wires Service Networking/NAT/IAM, and keeps cost-control feature flags (`enable_gke`, `enable_composer`, `enable_dataproc`, `enable_backup_services`, `enable_serverless_orchestration`, `enable_autopilot_drain_guard`, `enable_bigquery_tables`) ready for Always Free footprints; staging now defaults `enable_serverless_orchestration = false`.
-- Optional serverless orchestration module (Cloud Run HTTP + Workflows + Scheduler) remains available but is currently disabled to eliminate idle charges; only the batch Cloud Run job is managed.
-- Cloud Run batch container (`docker/cloud-run-job/`) runs as a dedicated job using the new `ifrs9-staging-job` service account, generates synthetic portfolios, writes stage summaries, and can publish results to GCS.
-- Staging infrastructure is presently deprovisioned (Terraform destroy + manual GCP cleanup completed 2025-09-28) and ready for a clean redeploy with free-tier settings.
+- Terraform staging stack sits under `deploy/terraform` with feature flags (`enable_gke`, `enable_composer`, `enable_dataproc`, `enable_backup_services`, `enable_serverless_orchestration`, `enable_autopilot_drain_guard`, `enable_bigquery_tables`). Staging currently disables serverless orchestration so only the Cloud Run batch job is active.
+- Cloud Run batch job (`google_cloud_run_v2_job.ifrs9_batch`) now uses a dedicated service account (`ifrs9-staging-job`) and remains provisioned by Terraform; the HTTP serverless module is disabled.
+- Infrastructure is **fully torn down** via targeted destroy (BigQuery datasets, Cloud Storage buckets, IAM service accounts, VPC, Cloud Run job). Only the KMS key ring `ifrs9-staging-keys` remains — key versions are in `DESTROY_SCHEDULED` state and will expire automatically.
+- The repo’s AI tooling is now strictly offline: all Gemini/Claude hooks removed, `src/ai_explanations.py` runs purely rule-based, and codebase analyzer is local-only.
+- As of 2025-09-28, staging GCP project `academic-ocean-472500-j4` is clean and ready for redeploy through Infrastructure Manager using this repository.
 - Airflow DAG `dags/ifrs9_pipeline.py` orchestrates synthetic data creation, feature engineering, IFRS9 rule staging, ML scoring, and reporting end-to-end without external agents.
 - Synthetic loan generation (`src/generate_data.py:DataGenerator`) now balances provision stages, applies safe default PDs, and seeds all libraries for deterministic test fixtures.
 - Dual processing paths (`src/polars_ml_integration.py`, `src/enhanced_ml_models.py`, `src/ml_model.py`) keep Polars and Pandas feature pipelines in lockstep, with streaming predictions able to operate directly on raw inputs.
@@ -57,10 +57,8 @@
 - Infrastructure prep: from `deploy/terraform`, run `terraform init -reconfigure -backend-config="bucket=ifrs9-terraform-state-staging"`, verify the project is empty (no staging GKE/Dataproc/Composer/Cloud Run/BQ/GCS resources), then run `terraform plan -var-file=staging.auto.tfvars` and apply once the diff is clean; imports are no longer required.
 - Local CLI prerequisites (installed): `gcloud` with application-default login and the HashiCorp `terraform` binary.
 
-### Recent Changes
-- 2025-09-28: Executed `terraform destroy -var-file=staging.auto.tfvars` to tear down staging resources, flipped `enable_serverless_orchestration` to false, added a dedicated Cloud Run job service account/output, and validated the refreshed plan for a free-tier redeploy.
-- 2025-09-28: Manually deleted lingering staging resources (GKE clusters, Dataproc cluster, Cloud Run job, Cloud Composer env, BigQuery datasets, staging GCS buckets, network/NAT/firewall) so the project is back to baseline Always Free spend before the next Terraform apply.
-- 2025-09-28: Added Terraform toggle `enable_monitoring` to allow skipping monitoring resources during imports, updated KMS key ring + crypto key imports, restored key versions to `ENABLED`, and fixed BigQuery dataset owner binding to use `iam_member`.
+- 2025-09-28 07:30 UTC: Terraform targeted destroy removed BigQuery datasets, GCS buckets, IAM service accounts, VPC, and Cloud Run job; only KMS key ring `ifrs9-staging-keys` remains (versions scheduled for destruction). Project is clean for Infrastructure Manager bootstrap.
+- 2025-09-28: Extensive repository cleanup — all Gemini/Claude hooks removed, Vertex AI integration stripped from explanations, `.gitignore` updated for Terraform artifacts, documentation adjusted to reflect offline tooling.
 - 2025-09-27: Updated staging tfvars with Cloud Run image/env overrides, pushed `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.1.0`, created `ifrs9-batch-job`, and executed a verification run via `gcloud run jobs execute --wait`.
 - 2025-10-27: Added BigQuery schema assets/SQL, re-enabled dataset provisioning behind `enable_bigquery_tables`, built Cloud Run batch Docker artefacts, and captured the serverless-only Terraform plan (`plan-staging.tfplan`).
 - 2025-10-27: Added Terraform feature flags (GKE/Composer/Dataproc/backup/serverless), Autopilot drain guard precondition, Cloud Run + Workflows orchestration module, and updated staging defaults for Always Free alignment.
