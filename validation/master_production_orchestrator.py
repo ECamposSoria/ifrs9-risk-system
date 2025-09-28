@@ -212,18 +212,6 @@ class MasterProductionOrchestrator:
         """Coordinate with specialized IFRS9 agents."""
         self.logger.info("🤝 Coordinating with specialized IFRS9 agents")
         
-        # Check agent availability
-        agents_dir = Path(__file__).parent.parent / ".claude" / "agents"
-        if agents_dir.exists():
-            agent_files = list(agents_dir.glob("ifrs9-*.md"))
-            self.logger.info(f"Found {len(agent_files)} specialized agents")
-            
-            for agent_file in agent_files:
-                agent_name = agent_file.stem
-                if agent_name in self.specialized_agents:
-                    self.specialized_agents[agent_name]["status"] = "available"
-                    self.logger.info(f"  ✅ {agent_name} ready")
-        
         # Distribute workload across agents
         await self._distribute_agent_workload()
     

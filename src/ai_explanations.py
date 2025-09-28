@@ -1,11 +1,9 @@
 """
-AI Explanations Module for IFRS9 Risk System
+Explanation utilities for the IFRS9 Risk System.
 
-This module provides AI-powered explanations for IFRS9 credit risk decisions,
-including natural language explanations, outlier detection, and SHAP-based model transparency.
-
-Supports local development mode with environment variable VERTEX_AI_ENABLED=false
-to use local ML models and rule-based explanations.
+This module now operates entirely offline using rule-based logic and local
+statistical models. All external LLM integrations have been removed to ensure
+the project runs without generative AI dependencies.
 """
 
 import os
@@ -16,20 +14,13 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 
-# Check if Vertex AI should be enabled
-VERTEX_AI_ENABLED = os.getenv('VERTEX_AI_ENABLED', 'false').lower() == 'true'
-AI_EXPLANATIONS_ENABLED = os.getenv('AI_EXPLANATIONS_ENABLED', 'false').lower() == 'true'
+# Optional BigQuery support (non-LLM)
+try:
+    from google.cloud import bigquery
+except Exception:  # pragma: no cover - optional dependency
+    bigquery = None
 
-# Google Cloud imports only when enabled
-if VERTEX_AI_ENABLED:
-    try:
-        from google.cloud import aiplatform, bigquery
-        from google.oauth2 import service_account
-        import vertexai
-        from vertexai.generative_models import GenerativeModel, GenerationConfig
-    except ImportError as e:
-        logging.warning(f"Vertex AI dependencies not available: {e}. Using local alternatives.")
-        VERTEX_AI_ENABLED = False
+AI_EXPLANATIONS_ENABLED = os.getenv('AI_EXPLANATIONS_ENABLED', 'false').lower() == 'true'
 
 # ML and explanation imports
 import shap
@@ -60,35 +51,24 @@ class IFRS9ExplanationEngine:
             anomaly_endpoint_id: Anomaly detection model endpoint ID
             credentials_path: Path to service account credentials
         """
-        self.vertex_ai_enabled = VERTEX_AI_ENABLED
+        self.vertex_ai_enabled = False
         self.explanations_enabled = AI_EXPLANATIONS_ENABLED
+        self.project_id = project_id
+        self.location = location
+        self.pd_endpoint_id = pd_endpoint_id
+        self.anomaly_endpoint_id = anomaly_endpoint_id
 
-        if self.vertex_ai_enabled:
-            if not project_id:
-                raise ValueError("project_id is required when VERTEX_AI_ENABLED=true")
+        # Initialize local explanation helpers
+        self._init_local_explainer()
 
-            self.project_id = project_id
-            self.location = location
-            self.pd_endpoint_id = pd_endpoint_id
-            self.anomaly_endpoint_id = anomaly_endpoint_id
-
-            # Initialize credentials
-            self.credentials = self._load_credentials(credentials_path)
-
-            # Initialize clients
-            self._init_clients()
-
-            # Initialize Vertex AI
-            vertexai.init(project=project_id, location=location, credentials=self.credentials)
-
-            # Initialize Gemini model for NLG
-            self.gemini_model = GenerativeModel("gemini-1.5-pro-002")
-
-            logger.info(f"Vertex AI Explanation Engine initialized for project: {project_id}")
+        # Optional BigQuery client for data retrieval (non-LLM)
+        if bigquery is not None:
+            try:
+                self.bq_client = bigquery.Client(project=self.project_id) if self.project_id else bigquery.Client()
+            except Exception:
+                self.bq_client = None
         else:
-            logger.info("AI explanations using local rule-based system")
-            # Local rule-based explanation system
-            self._init_local_explainer()
+            self.bq_client = None
 
     def _init_local_explainer(self):
         """Initialize local rule-based explanation system"""
@@ -116,28 +96,7 @@ class IFRS9ExplanationEngine:
         Returns:
             Dict containing explanation details
         """
-        if self.vertex_ai_enabled and self.explanations_enabled:
-            return self._generate_ai_explanation(loan_data)
-        else:
-            return self._generate_rule_based_explanation(loan_data)
-
-    def _generate_ai_explanation(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate AI-powered explanation using Vertex AI"""
-        try:
-            # This would use the Gemini model for natural language generation
-            prompt = self._build_explanation_prompt(loan_data)
-            response = self.gemini_model.generate_content(prompt)
-
-            return {
-                "explanation_type": "ai_generated",
-                "explanation": response.text,
-                "confidence": 0.85,  # Mock confidence score
-                "data_sources": ["credit_bureau", "payment_history", "economic_indicators"]
-            }
-
-        except Exception as e:
-            logger.error(f"AI explanation failed: {str(e)}. Falling back to rule-based.")
-            return self._generate_rule_based_explanation(loan_data)
+        return self._generate_rule_based_explanation(loan_data)
 
     def _generate_rule_based_explanation(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate rule-based explanation using local logic"""
@@ -187,34 +146,10 @@ class IFRS9ExplanationEngine:
     def get_system_info(self) -> Dict[str, Any]:
         """Get information about the explanation system configuration"""
         return {
-            "vertex_ai_enabled": self.vertex_ai_enabled,
             "explanations_enabled": self.explanations_enabled,
-            "explanation_mode": "ai_powered" if self.vertex_ai_enabled else "rule_based",
+            "explanation_mode": "rule_based",
             "project_id": getattr(self, 'project_id', None)
         }
-    
-    def _load_credentials(self, credentials_path: Optional[str]) -> Optional[service_account.Credentials]:
-        """Load service account credentials"""
-        if credentials_path and os.path.exists(credentials_path):
-            return service_account.Credentials.from_service_account_file(credentials_path)
-        elif os.getenv('GOOGLE_APPLICATION_CREDENTIALS'):
-            cred_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            if os.path.exists(cred_path):
-                return service_account.Credentials.from_service_account_file(cred_path)
-        return None
-    
-    def _init_clients(self):
-        """Initialize Google Cloud clients"""
-        client_options = {"api_endpoint": f"{self.location}-aiplatform.googleapis.com"}
-        self.prediction_client = aiplatform.gapic.PredictionServiceClient(
-            client_options=client_options,
-            credentials=self.credentials
-        )
-        
-        self.bq_client = bigquery.Client(
-            project=self.project_id,
-            credentials=self.credentials
-        )
 
 class IFRS9ExplainerCore(VertexAIExplanationEngine):
     """Core explanation functionality for IFRS9 decisions"""
@@ -274,45 +209,11 @@ class IFRS9ExplainerCore(VertexAIExplanationEngine):
             return pd.DataFrame()
     
     def predict_pd_with_endpoint(self, loan_data: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
-        """Get PD prediction from Vertex AI endpoint"""
-        if not self.pd_endpoint_id:
-            logger.warning("PD endpoint not configured, using fallback calculation")
-            return self._fallback_pd_calculation(loan_data)
-        
-        try:
-            # Prepare instance for prediction
-            instance = self._prepare_prediction_instance(loan_data)
-            
-            endpoint = self.prediction_client.endpoint_path(
-                project=self.project_id, 
-                location=self.location, 
-                endpoint=self.pd_endpoint_id
-            )
-            
-            response = self.prediction_client.predict(
-                endpoint=endpoint,
-                instances=[instance]
-            )
-            
-            prediction = response.predictions[0]
-            pd_value = prediction.get('prediction', [0.0])[0]
-            confidence = prediction.get('confidence', 0.0)
-            
-            metadata = {
-                'model_endpoint': self.pd_endpoint_id,
-                'confidence_score': confidence,
-                'prediction_timestamp': datetime.now().isoformat()
-            }
-            
-            return pd_value, metadata
-            
-        except Exception as e:
-            logger.error(f"Error calling PD endpoint: {str(e)}")
-            return self._fallback_pd_calculation(loan_data)
-    
+        """Get PD prediction (rule-based fallback)."""
+        return self._fallback_pd_calculation(loan_data)
+
     def _prepare_prediction_instance(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare loan data for ML model prediction"""
-        # Extract numerical features
+        """Prepare loan data for ML model prediction (kept for compatibility)."""
         features = {
             'loan_amount': float(loan_data.get('loan_amount', 0)),
             'current_balance': float(loan_data.get('current_balance', 0)),
@@ -324,14 +225,8 @@ class IFRS9ExplainerCore(VertexAIExplanationEngine):
             'term_months': int(loan_data.get('term_months', 60)),
             'ltv_ratio': float(loan_data.get('ltv_ratio', 0.8))
         }
-        
-        # Add categorical features (encoded)
-        product_encoding = self._encode_product_type(loan_data.get('producto_tipo', ''))
-        region_encoding = self._encode_region(loan_data.get('region', ''))
-        
-        features.update(product_encoding)
-        features.update(region_encoding)
-        
+        features.update(self._encode_product_type(loan_data.get('producto_tipo', '')))
+        features.update(self._encode_region(loan_data.get('region', '')))
         return features
     
     def _encode_product_type(self, product_type: str) -> Dict[str, float]:
@@ -461,7 +356,7 @@ class NaturalLanguageExplainer(IFRS9ExplainerCore):
     def generate_ifrs9_explanation(self, 
                                   loan_id: str, 
                                   table_id: str,
-                                  use_gemini: bool = True) -> Dict[str, Any]:
+                                  use_gemini: bool = False) -> Dict[str, Any]:
         """Generate comprehensive IFRS9 explanation for a loan"""
         
         # Get loan data
@@ -477,15 +372,13 @@ class NaturalLanguageExplainer(IFRS9ExplainerCore):
         # Determine IFRS9 stage
         stage, stage_reasoning = self.determine_ifrs9_stage(loan_data, pd_value)
         
-        # Generate natural language explanation
+        # Generate natural language explanation (rule-based only)
         if use_gemini:
-            explanation = self._generate_gemini_explanation(
-                loan_id, loan_data, stage, pd_value, stage_reasoning
-            )
-        else:
-            explanation = self._generate_rule_based_explanation(
-                loan_id, loan_data, stage, pd_value, stage_reasoning
-            )
+            logger.warning("Generative explanations are disabled; using rule-based output instead.")
+
+        explanation = self._generate_rule_based_explanation(
+            loan_id, loan_data, stage, pd_value, stage_reasoning
+        )
         
         return {
             'loan_id': loan_id,
@@ -497,82 +390,6 @@ class NaturalLanguageExplainer(IFRS9ExplainerCore):
             'explanation_timestamp': datetime.now().isoformat()
         }
     
-    def _generate_gemini_explanation(self, 
-                                   loan_id: str,
-                                   loan_data: Dict[str, Any],
-                                   stage: int,
-                                   pd_value: float,
-                                   stage_reasoning: Dict[str, Any]) -> str:
-        """Generate explanation using Gemini AI"""
-        
-        # Prepare context for Gemini
-        context = self._prepare_gemini_context(loan_data, stage, pd_value, stage_reasoning)
-        
-        prompt = f"""
-        Actúa como un experto en riesgo crediticio y estándares IFRS9. Explica de manera clara y profesional 
-        por qué el préstamo {loan_id} ha sido clasificado en la Etapa {stage} según IFRS9.
-
-        Información del préstamo:
-        {context}
-
-        Proporciona una explicación que incluya:
-        1. La razón principal de la clasificación
-        2. Los factores de riesgo más relevantes
-        3. Implicaciones para las provisiones
-        4. Recomendaciones de seguimiento (si aplica)
-
-        La explicación debe ser comprensible para profesionales del sector financiero pero no excesivamente técnica.
-        Límite: 200 palabras.
-        """
-        
-        try:
-            generation_config = GenerationConfig(
-                temperature=0.2,
-                top_p=0.9,
-                top_k=30,
-                max_output_tokens=300,
-            )
-            
-            response = self.gemini_model.generate_content(
-                prompt, 
-                generation_config=generation_config
-            )
-            
-            return response.text.strip()
-            
-        except Exception as e:
-            logger.error(f"Error generating Gemini explanation: {str(e)}")
-            return self._generate_rule_based_explanation(
-                loan_id, loan_data, stage, pd_value, stage_reasoning
-            )
-    
-    def _prepare_gemini_context(self,
-                              loan_data: Dict[str, Any],
-                              stage: int,
-                              pd_value: float,
-                              stage_reasoning: Dict[str, Any]) -> str:
-        """Prepare context string for Gemini"""
-        
-        context_items = []
-        context_items.append(f"- Importe del préstamo: €{loan_data.get('loan_amount', 0):,.2f}")
-        context_items.append(f"- Saldo actual: €{loan_data.get('current_balance', 0):,.2f}")
-        context_items.append(f"- Puntuación crediticia: {loan_data.get('credit_score', 'N/A')}")
-        context_items.append(f"- Probabilidad de incumplimiento (PD): {pd_value:.4f}")
-        context_items.append(f"- Días de mora: {loan_data.get('days_past_due', 0)}")
-        context_items.append(f"- Ratio DTI: {loan_data.get('dti_ratio', 0):.2%}")
-        context_items.append(f"- Producto: {loan_data.get('producto_tipo', 'N/A')}")
-        context_items.append(f"- Región: {loan_data.get('region', 'N/A')}")
-        context_items.append(f"- Historial de pagos: {loan_data.get('historial_de_pagos', 'N/A')}")
-        
-        # Add reasoning context
-        if stage_reasoning.get('primary_reason'):
-            context_items.append(f"- Razón principal: {stage_reasoning['primary_reason']}")
-        
-        if stage_reasoning.get('indicators'):
-            indicators = ', '.join(stage_reasoning['indicators'])
-            context_items.append(f"- Indicadores de riesgo: {indicators}")
-        
-        return '\n'.join(context_items)
     
     def _generate_rule_based_explanation(self,
                                        loan_id: str,
@@ -1077,7 +894,7 @@ class BatchExplanationProcessor(IFRS9ExplainerCore):
                     try:
                         # Generate IFRS9 explanation
                         explanation = self.nl_explainer.generate_ifrs9_explanation(
-                            loan_id, input_table_id, use_gemini=True
+                            loan_id, input_table_id, use_gemini=False
                         )
                         
                         results.append({

@@ -102,6 +102,12 @@ models/*.pb
 tmp/
 temp/
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
 # Docker
 .dockerignore
 

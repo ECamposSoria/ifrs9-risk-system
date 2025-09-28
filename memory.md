@@ -1,12 +1,13 @@
 # System Memory
 
-## Last Updated: 2025-09-27 20:37 UTC
-## Version: 0.8.1
+## Last Updated: 2025-09-28 05:52 UTC
+## Version: 0.8.4
 
 ### Current Architecture
-- Terraform staging stack under `deploy/terraform` now enables required Google APIs, wires Service Networking/NAT/IAM, and supports cost-control feature flags (`enable_gke`, `enable_composer`, `enable_dataproc`, `enable_backup_services`, `enable_serverless_orchestration`, `enable_autopilot_drain_guard`, `enable_bigquery_tables`) to pivot between full and Always Free footprints.
-- Serverless orchestration module couples Cloud Run, Workflows, and Cloud Scheduler (defaulting to `us-central1`) so Always Free environments can run on-demand jobs without Composer or Dataproc.
-- Cloud Run batch container (`docker/cloud-run-job/`) generates synthetic portfolios, writes stage summaries, and can publish results to GCS for scheduled jobs.
+- Terraform staging stack under `deploy/terraform` enables required Google APIs, wires Service Networking/NAT/IAM, and keeps cost-control feature flags (`enable_gke`, `enable_composer`, `enable_dataproc`, `enable_backup_services`, `enable_serverless_orchestration`, `enable_autopilot_drain_guard`, `enable_bigquery_tables`) ready for Always Free footprints; staging now defaults `enable_serverless_orchestration = false`.
+- Optional serverless orchestration module (Cloud Run HTTP + Workflows + Scheduler) remains available but is currently disabled to eliminate idle charges; only the batch Cloud Run job is managed.
+- Cloud Run batch container (`docker/cloud-run-job/`) runs as a dedicated job using the new `ifrs9-staging-job` service account, generates synthetic portfolios, writes stage summaries, and can publish results to GCS.
+- Staging infrastructure is presently deprovisioned (Terraform destroy + manual GCP cleanup completed 2025-09-28) and ready for a clean redeploy with free-tier settings.
 - Airflow DAG `dags/ifrs9_pipeline.py` orchestrates synthetic data creation, feature engineering, IFRS9 rule staging, ML scoring, and reporting end-to-end without external agents.
 - Synthetic loan generation (`src/generate_data.py:DataGenerator`) now balances provision stages, applies safe default PDs, and seeds all libraries for deterministic test fixtures.
 - Dual processing paths (`src/polars_ml_integration.py`, `src/enhanced_ml_models.py`, `src/ml_model.py`) keep Polars and Pandas feature pipelines in lockstep, with streaming predictions able to operate directly on raw inputs.
@@ -53,10 +54,13 @@
 - Build containers: `docker-compose -f docker-compose.ifrs9.yml build`.
 - Run stack: `docker-compose -f docker-compose.ifrs9.yml up -d`.
 - Execute full validation suite inside Spark container: `make test` (ensures Airflow/Spark services running).
-- Infrastructure prep: from `deploy/terraform`, run `terraform init -backend=false && terraform validate`; Stage 1 applies should target `google_project_service.*` before full plan.
+- Infrastructure prep: from `deploy/terraform`, run `terraform init -reconfigure -backend-config="bucket=ifrs9-terraform-state-staging"`, verify the project is empty (no staging GKE/Dataproc/Composer/Cloud Run/BQ/GCS resources), then run `terraform plan -var-file=staging.auto.tfvars` and apply once the diff is clean; imports are no longer required.
 - Local CLI prerequisites (installed): `gcloud` with application-default login and the HashiCorp `terraform` binary.
 
 ### Recent Changes
+- 2025-09-28: Executed `terraform destroy -var-file=staging.auto.tfvars` to tear down staging resources, flipped `enable_serverless_orchestration` to false, added a dedicated Cloud Run job service account/output, and validated the refreshed plan for a free-tier redeploy.
+- 2025-09-28: Manually deleted lingering staging resources (GKE clusters, Dataproc cluster, Cloud Run job, Cloud Composer env, BigQuery datasets, staging GCS buckets, network/NAT/firewall) so the project is back to baseline Always Free spend before the next Terraform apply.
+- 2025-09-28: Added Terraform toggle `enable_monitoring` to allow skipping monitoring resources during imports, updated KMS key ring + crypto key imports, restored key versions to `ENABLED`, and fixed BigQuery dataset owner binding to use `iam_member`.
 - 2025-09-27: Updated staging tfvars with Cloud Run image/env overrides, pushed `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.1.0`, created `ifrs9-batch-job`, and executed a verification run via `gcloud run jobs execute --wait`.
 - 2025-10-27: Added BigQuery schema assets/SQL, re-enabled dataset provisioning behind `enable_bigquery_tables`, built Cloud Run batch Docker artefacts, and captured the serverless-only Terraform plan (`plan-staging.tfplan`).
 - 2025-10-27: Added Terraform feature flags (GKE/Composer/Dataproc/backup/serverless), Autopilot drain guard precondition, Cloud Run + Workflows orchestration module, and updated staging defaults for Always Free alignment.

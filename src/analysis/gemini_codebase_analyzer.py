@@ -1,8 +1,8 @@
 """
-Gemini-Enhanced Codebase Analyzer for IFRS9
+Codebase Analyzer for IFRS9
 
-Offline-first repository analysis with optional Gemini (Vertex AI) enrichment.
-Safe to run without network; when configured, uses Vertex AI GenerativeModel.
+Offline-first repository analysis with optional statistics and heuristics.
+All LLM integrations have been removed to keep analysis self-contained.
 """
 
 from __future__ import annotations
@@ -18,15 +18,6 @@ import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
-
-# Optional imports (guarded)
-try:
-    import vertexai
-    from vertexai.generative_models import GenerativeModel, GenerationConfig
-    _HAS_VERTEX = True
-except Exception:
-    _HAS_VERTEX = False
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -54,12 +45,7 @@ class AnalyzerConfig:
     root: str = "."
     max_file_bytes: int = 200_000
     include_patterns: Tuple[str, ...] = ("**/*.py", "**/*.yml", "**/*.yaml", "**/*.toml")
-    exclude_dirs: Tuple[str, ...] = (".git", "__pycache__", "ifrs9_validation_env", ".venv", ".serena", ".claude")
-    gemini_model: str = "gemini-1.5-pro-002"
-    gcp_project: Optional[str] = None
-    gcp_location: str = "us-central1"
-    credentials_path: Optional[str] = None
-    enable_gemini: bool = False
+    exclude_dirs: Tuple[str, ...] = (".git", "__pycache__", "ifrs9_validation_env", ".venv", ".serena")
 
 
 class CodebaseAnalyzer:
@@ -67,20 +53,6 @@ class CodebaseAnalyzer:
         self.cfg = cfg
         self.root_path = Path(cfg.root).resolve()
         self.files: List[Path] = []
-        self.vertex_model = None
-        if cfg.enable_gemini and _HAS_VERTEX:
-            try:
-                creds_path = cfg.credentials_path or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-                if creds_path and Path(creds_path).exists():
-                    # vertexai.init can take credentials kwarg in recent versions
-                    vertexai.init(project=cfg.gcp_project, location=cfg.gcp_location)
-                else:
-                    vertexai.init(project=cfg.gcp_project, location=cfg.gcp_location)
-                self.vertex_model = GenerativeModel(cfg.gemini_model)
-                logger.info("Gemini model initialized for codebase analysis")
-            except Exception as e:
-                logger.warning(f"Gemini initialization failed, continuing offline: {e}")
-                self.vertex_model = None
 
     def scan(self) -> RepoStats:
         def is_excluded(p: Path) -> bool:
@@ -177,7 +149,7 @@ class CodebaseAnalyzer:
             ], generation_config=gc)
             return resp.text
         except Exception as e:
-            logger.warning(f"Gemini enrichment failed: {e}")
+                logger.warning(f"Optional enrichment failed: {e}")
             return None
 
     def run(self) -> Dict[str, Any]:
@@ -196,7 +168,7 @@ class CodebaseAnalyzer:
 def main():
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    ap = argparse.ArgumentParser(description="IFRS9 Gemini Codebase Analyzer")
+    ap = argparse.ArgumentParser(description="IFRS9 Codebase Analyzer")
     ap.add_argument("--root", default=".")
     ap.add_argument("--enable-gemini", action="store_true")
     ap.add_argument("--project")
@@ -222,4 +194,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

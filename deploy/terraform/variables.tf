@@ -77,6 +77,12 @@ variable "enable_bigquery_tables" {
   default     = true
 }
 
+variable "enable_monitoring" {
+  description = "Enable monitoring module resources (audit sinks, budgets, notification channels)."
+  type        = bool
+  default     = true
+}
+
 variable "terraform_state_bucket" {
   description = "GCS bucket for Terraform state"
   type        = string

@@ -124,8 +124,7 @@ graph TB
 
 #### AI Explanation Engine (`src/ai_explanations.py`)
 - **SHAP Integration**: Feature importance and contribution analysis
-- **Vertex AI Explanations**: Google Cloud native explainability
-- **Gemini AI**: Natural language explanations for business users
+- **Rule-Based Narratives**: Deterministic explanations for regulatory reviews
 - **Regulatory Narratives**: Automated compliance documentation
 
 ### 3. Data Storage Layer

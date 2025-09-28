@@ -62,3 +62,9 @@ variable "enable_tables" {
   type        = bool
   default     = true
 }
+
+variable "data_transfer_service_account" {
+  description = "Service account email used by BigQuery Data Transfer scheduled queries"
+  type        = string
+  default     = ""
+}

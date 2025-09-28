@@ -84,7 +84,7 @@ loadtest-down: ## Stop Locust load testing
 	@echo "$(YELLOW)Stopping Locust...$(NC)"
 	docker-compose -f deploy/loadtest/docker-compose.loadtest.yml down
 
-analyze-codebase: ## Run offline codebase analysis (optional Gemini enrichment with flags)
+analyze-codebase: ## Run offline codebase analysis
 	@echo "$(GREEN)Analyzing codebase...$(NC)"
 	$(PYTHON) src/analysis/gemini_codebase_analyzer.py --root . --out reports/codebase_analysis_report.json
 	@echo "$(GREEN)Report: reports/codebase_analysis_report.json$(NC)"

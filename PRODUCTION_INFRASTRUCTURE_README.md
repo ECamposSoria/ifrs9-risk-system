@@ -187,12 +187,10 @@ python3 deploy/production_deployment.py
 - Request size limits and basic rate limiting
 - Agents readiness checks: `make agents-readiness` (report at `reports/agents_readiness_report.json`)
 
-## 🤖 Gemini Codebase Analysis
+## 🔍 Codebase Analysis
 - Offline-first analyzer: `src/analysis/gemini_codebase_analyzer.py`
 - Run offline: `make analyze-codebase`
-- Enable Gemini enrichment (Vertex AI):
-  `python src/analysis/gemini_codebase_analyzer.py --enable-gemini --project <GCP_PROJECT> --credentials <path>`
-  (Requires valid network and credentials)
+- Optional enrichment hooks have been disabled to ensure fully local execution.
 
 ### Scheduled Jobs (Cron)
 ```bash

@@ -13,7 +13,7 @@ A comprehensive, enterprise-grade IFRS9 credit risk management system designed f
 
 - **IFRS9 Compliance**: Automated staging classification and ECL calculations
 - **Advanced ML Models**: XGBoost, LightGBM, and CatBoost for risk prediction
-- **AI Explanations**: Vertex AI and Gemini-powered model interpretability
+- **Explainability**: Rule-based narratives with SHAP-driven model transparency
 - **Real-time Dashboards**: Looker Studio integration with 7 comprehensive dashboards
 - **Cloud-Native**: Google Cloud Platform with auto-scaling capabilities
 - **Production-Ready**: Kubernetes deployment with monitoring and alerting

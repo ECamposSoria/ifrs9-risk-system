@@ -264,6 +264,7 @@ module "bigquery" {
     composer = module.iam.composer_service_account_email
     vertex   = module.iam.vertex_service_account_email
   }
+  data_transfer_service_account = module.iam.dataproc_service_account_email
 
   depends_on = [
     module.kms,
@@ -460,6 +461,7 @@ module "composer" {
 # Monitoring and logging
 module "monitoring" {
   source = "./modules/monitoring"
+  count  = var.enable_monitoring ? 1 : 0
 
   project_id  = var.project_id
   environment = var.environment
@@ -467,7 +469,7 @@ module "monitoring" {
 
   # Notification channels
   notification_emails          = var.monitoring_notification_emails
-  audit_dataset_id             = module.bigquery.analytics_dataset_id
+  audit_dataset_id             = try(module.bigquery.analytics_dataset_id, "")
   billing_account_id           = var.billing_account_id
   budget_monthly_amount        = var.budget_monthly_amount
   budget_alert_spend_threshold = var.budget_alert_spend_threshold

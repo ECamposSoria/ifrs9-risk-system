@@ -147,20 +147,20 @@ output "serverless_orchestration" {
 
 output "cloud_run_batch_job" {
   description = "Cloud Run batch job information"
-  value = var.enable_serverless_orchestration ? {
-    job_name = google_cloud_run_v2_job.ifrs9_batch[0].name
-    region   = google_cloud_run_v2_job.ifrs9_batch[0].location
-  } : null
+  value = {
+    job_name = google_cloud_run_v2_job.ifrs9_batch.name
+    region   = google_cloud_run_v2_job.ifrs9_batch.location
+  }
 }
 
 # Monitoring
 output "monitoring" {
   description = "Monitoring and alerting information"
-  value = {
-    notification_channel_ids = module.monitoring.notification_channel_ids
-    budget_names             = module.monitoring.budget_names
-    audit_log_sink           = module.monitoring.audit_log_sink
-  }
+  value = var.enable_monitoring ? {
+    notification_channel_ids = module.monitoring[0].notification_channel_ids
+    budget_names             = module.monitoring[0].budget_names
+    audit_log_sink           = module.monitoring[0].audit_log_sink
+  } : null
 }
 
 # Cloud SQL (if enabled)
