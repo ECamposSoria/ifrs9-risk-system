@@ -16,6 +16,8 @@ resource "google_bigquery_table" "ecl_by_stage" {
   table_id            = "ecl_by_stage"
   deletion_protection = false
 
+  depends_on = [google_bigquery_table.loan_portfolio]
+
   view {
     use_legacy_sql = false
     query          = <<-SQL
@@ -41,6 +43,8 @@ resource "google_bigquery_table" "geographic_distribution" {
   table_id            = "geographic_distribution"
   deletion_protection = false
 
+  depends_on = [google_bigquery_table.loan_portfolio]
+
   view {
     use_legacy_sql = false
     query          = <<-SQL
@@ -62,6 +66,8 @@ resource "google_bigquery_table" "product_analysis" {
   dataset_id          = google_bigquery_dataset.analytics.dataset_id
   table_id            = "product_analysis"
   deletion_protection = false
+
+  depends_on = [google_bigquery_table.loan_portfolio]
 
   view {
     use_legacy_sql = false
@@ -86,6 +92,8 @@ resource "google_bigquery_table" "risk_metrics" {
   table_id            = "risk_metrics"
   deletion_protection = false
 
+  depends_on = [google_bigquery_table.loan_portfolio]
+
   view {
     use_legacy_sql = false
     query          = <<-SQL
@@ -109,6 +117,8 @@ resource "google_bigquery_table" "credit_score_bands" {
   dataset_id          = google_bigquery_dataset.analytics.dataset_id
   table_id            = "credit_score_bands"
   deletion_protection = false
+
+  depends_on = [google_bigquery_table.loan_portfolio]
 
   view {
     use_legacy_sql = false
