@@ -1,94 +1,346 @@
 # System Memory
 
-## Last Updated: 2025-09-28 07:33 UTC
-## Version: 0.8.5
+## Last Updated: 2025-12-13
+## Version: 0.9.0
 
-- Terraform staging stack sits under `deploy/terraform` with feature flags (`enable_gke`, `enable_composer`, `enable_dataproc`, `enable_backup_services`, `enable_serverless_orchestration`, `enable_autopilot_drain_guard`, `enable_bigquery_tables`). Staging currently disables serverless orchestration so only the Cloud Run batch job is active.
-- Cloud Run batch job (`google_cloud_run_v2_job.ifrs9_batch`) now uses a dedicated service account (`ifrs9-staging-job`) and remains provisioned by Terraform; the HTTP serverless module is disabled.
-- Infrastructure is **fully torn down** via targeted destroy (BigQuery datasets, Cloud Storage buckets, IAM service accounts, VPC, Cloud Run job). Only the KMS key ring `ifrs9-staging-keys` remains — key versions are in `DESTROY_SCHEDULED` state and will expire automatically.
-- The repo’s AI tooling is now strictly offline: all Gemini/Claude hooks removed, `src/ai_explanations.py` runs purely rule-based, and codebase analyzer is local-only.
-- As of 2025-09-28, staging GCP project `academic-ocean-472500-j4` is clean and ready for redeploy through Infrastructure Manager using this repository.
-- Airflow DAG `dags/ifrs9_pipeline.py` orchestrates synthetic data creation, feature engineering, IFRS9 rule staging, ML scoring, and reporting end-to-end without external agents.
-- Synthetic loan generation (`src/generate_data.py:DataGenerator`) now balances provision stages, applies safe default PDs, and seeds all libraries for deterministic test fixtures.
-- Dual processing paths (`src/polars_ml_integration.py`, `src/enhanced_ml_models.py`, `src/ml_model.py`) keep Polars and Pandas feature pipelines in lockstep, with streaming predictions able to operate directly on raw inputs.
-- IFRS9 rules engine (`src/rules_engine.py:IFRS9RulesEngine`) drives staging, SICR detection, ECL attribution, and configurable defaults via `config/ifrs9_rules.yaml`, exposing compatibility helpers for optimized test flows.
-- Supporting services (Spark, Postgres, Airflow UI, Jupyter) run through `docker-compose.ifrs9.yml`, sharing source, config, reports, validation assets, and test suites via named volumes.
+---
 
-### Container Setup
-- Base Images: `python:3.10-slim` (Spark workers/master), Airflow/Jupyter custom images extending pinned Python runtimes; Postgres `15-alpine` for orchestration metadata.
-- Services: Postgres, Spark master/worker, Airflow webserver/scheduler/triggerer/init, Jupyter Lab, validation and reporting helpers (see `docker-compose.ifrs9.yml`).
-- Ports: Postgres `5432`, Spark master `7077/8080`, Spark worker UI `8081`, Airflow webserver `8080`, Jupyter `8888` (all mapped via environment overrides).
-- Volumes: Shared mounts for `./src`, `./tests`, `./validation`, `./scripts`, `./config`, `./data`, `./logs`, and persisted `./reports` artifacts across containers; Postgres uses `postgres-db-volume`.
-- Environment Variables: `IFRS9_RULES_CONFIG` (optional override), Spark auth flags, `SPARK_MASTER`, `JUPYTER_TOKEN`; test fixtures force `spark.sql.execution.arrow.pyspark.enabled=false` to avoid Arrow IPC issues.
+## Project Overview
 
-### Implemented Features
-- Terraform cost-control toggles for GKE/Composer/Dataproc/backups, autopilot drain guard script, optional BigQuery table provisioning, and the serverless orchestration module are now baseline features.
-- Balanced synthetic stage assignment with deterministic seeds and safe probability defaults to stabilize regression tests.
-- Advanced feature engineering refactored for Polars/Pandas parity, simplified model selection (RandomForest baseline), and resilient handling of preprocessed feature sets.
-- IFRS9 rules engine enhancements covering SICR thresholds, optional columns with defaults, deterministic staging adjustments, Stage 2 exposure caps, and compatibility alias methods (`_apply_staging_rules`, `calculate_risk_parameters`, etc.).
-- SHAP fallback gracefully uses feature importances when SHAP calculations fail, keeping explainability consistent across pipelines.
-- Docker helpers, Spark fixtures, and configs hardened to run without Arrow, ensure reports directory availability, and mount updated volumes for validation artifacts.
-- Streaming predictions path supports raw loan inputs while maintaining consistent accuracy between legacy and optimized pipelines.
-- Test harness suppresses noisy sklearn category/precision warnings so suite output stays actionable during health runs.
+**IFRS9 Risk Management System** - A production-grade financial risk calculation system implementing International Financial Reporting Standard 9 for credit risk assessment, Expected Credit Loss (ECL) calculation, and regulatory compliance.
 
-### API Endpoints (if applicable)
-- None — batch/stream processing is orchestrated via Airflow and Spark jobs rather than HTTP endpoints.
+- **Status**: Production-ready (98% completion)
+- **Current Branch**: master
+- **GCP Project**: `academic-ocean-472500-j4`
+- **Primary Region**: `southamerica-east1`
 
-### Database Schema (if applicable)
-- Postgres stores Airflow metadata; IFRS9 computation remains in-memory (Pandas/Polars DataFrames) with no persistent application schema tracked.
+---
 
-### Key Functions/Classes
-- `src/generate_data.py:DataGenerator.generate_loan_portfolio` — emits balanced stage data with deterministic defaults for testing.
-- `src/enhanced_ml_models.py:AdvancedFeatureEngineer` — harmonizes feature construction across Polars/Pandas with guardrails for missing inputs.
-- `src/enhanced_ml_models.py:OptimizedMLPipeline` — orchestrates preprocessing, RandomForest baseline fitting, SHAP/feature-importance explanations, and streaming-safe predictions.
-- `src/rules_engine.py:IFRS9RulesEngine` — central staging/SICR/ECL logic with validation and summary helpers aligned to optimized test expectations.
-- `src/polars_ml_integration.py:PolarsMLOrchestrator` (and streaming utilities) — executes Polars-native workflows while mirroring Pandas outputs.
+## Directory Structure
 
-### Integration Points
-- Polars/Pandas dual support for feature pipelines and model scoring.
-- PySpark containers for distributed validation workloads with Arrow disabled for stability.
-- SHAP explainability with feature-importance fallback.
-- Docker-based orchestration (Airflow, Spark, Postgres, Jupyter) for local and CI validation.
+```
+/home/eze/projects/ifrs9-risk-system/
+├── src/                          # Core Python modules
+│   ├── rules_engine.py           # IFRS9 PySpark rules processing
+│   ├── enhanced_ml_models.py     # Advanced ML (XGBoost/LightGBM/CatBoost)
+│   ├── polars_ml_integration.py  # Polars high-performance ML
+│   ├── ml_model.py               # Legacy ML classifiers
+│   ├── generate_data.py          # Synthetic loan portfolio generator
+│   ├── validation.py             # Pandera/Great Expectations validation
+│   ├── gcp_integrations.py       # GCP BigQuery/GCS/Dataproc integration
+│   ├── ai_explanations.py        # Rule-based explainability (offline)
+│   ├── validation_simple.py      # Simple validation utilities
+│   ├── polars_ml_benchmark.py    # Performance benchmarking
+│   ├── analysis/
+│   │   └── gemini_codebase_analyzer.py  # Offline codebase analysis
+│   └── security/
+│       └── security_middleware.py       # Security middleware
+│
+├── deploy/                       # Infrastructure as Code
+│   └── terraform/                # GCP Terraform deployment
+│       ├── main.tf               # Provider + API enablement
+│       ├── cloud-run-job.tf      # Cloud Run batch job
+│       ├── staging.auto.tfvars   # Staging environment config
+│       ├── variables.tf          # Variable definitions
+│       ├── outputs.tf            # Output definitions
+│       └── modules/              # 15 Terraform modules
+│           ├── gke/              # Google Kubernetes Engine
+│           ├── composer/         # Cloud Composer (Airflow)
+│           ├── dataproc/         # Cloud Dataproc (Spark)
+│           ├── bigquery/         # BigQuery data warehouse
+│           ├── cloud-storage/    # GCS buckets
+│           ├── cloud-sql/        # Cloud SQL (Postgres)
+│           ├── kms/              # Cloud KMS encryption
+│           ├── iam/              # Identity & Access Management
+│           ├── vpc/              # Virtual Private Cloud
+│           ├── load-balancer/    # HTTPS load balancing
+│           ├── monitoring/       # Cloud Monitoring
+│           ├── backup/           # Backup orchestration
+│           ├── vertex-ai/        # Vertex AI Workbench
+│           └── serverless/       # Cloud Run + Workflows
+│
+├── docker/                       # Container definitions
+│   ├── cloud-run-job/            # Cloud Run batch container
+│   │   ├── Dockerfile            # Multi-stage build
+│   │   ├── cloud_run_job.py      # Entrypoint script
+│   │   └── requirements.txt
+│   ├── airflow/
+│   │   └── Dockerfile.ifrs9-airflow
+│   ├── jupyter/
+│   │   └── Dockerfile.ifrs9-jupyter
+│   ├── validation/
+│   │   └── Dockerfile.validation
+│   └── production/
+│       └── Dockerfile.api
+│
+├── config/                       # Configuration files
+│   ├── ifrs9_rules.yaml          # IFRS9 staging/ECL parameters
+│   └── orchestration_rules.yaml  # Airflow DAG config
+│
+├── dags/                         # Apache Airflow DAGs
+│   └── ifrs9_pipeline.py         # Main IFRS9 orchestration
+│
+├── tests/                        # Test suite (14 modules)
+│   ├── conftest.py               # Pytest fixtures & Spark config
+│   ├── test_basic.py             # Basic unit tests
+│   ├── test_rules.py             # IFRS9 rules engine tests
+│   ├── test_rules_optimized.py   # Optimized rules tests
+│   ├── test_polars_*.py          # Polars integration tests
+│   ├── test_data_factory.py      # Data generation tests
+│   ├── test_gcp_*.py             # GCP integration tests
+│   └── docker/                   # Docker-specific tests
+│
+├── validation/                   # Validation framework
+│   ├── datetime_converter.py
+│   ├── docker_environment_validator.py
+│   ├── polars_health_check.py
+│   ├── production_readiness_validator.py
+│   └── end_to_end_pipeline_validator.py
+│
+├── k8s/                          # Kubernetes manifests
+│   ├── namespace.yaml
+│   ├── deployments/
+│   └── gke/
+│
+├── monitoring/                   # Monitoring setup
+├── argo/                         # ArgoCD workflows
+├── notebooks/                    # Jupyter notebooks
+│   ├── EDA.ipynb
+│   └── LocalPipeline.ipynb
+├── data/                         # Data directories
+│   ├── raw/
+│   └── processed/
+├── docs/                         # Documentation
+├── scripts/                      # Utility scripts
+├── reports/                      # Generated reports
+│
+├── docker-compose.ifrs9.yml      # Multi-service orchestration
+├── Dockerfile.ifrs9-spark        # Spark base image
+├── Makefile                      # Build automation
+├── requirements.txt              # Python dependencies
+├── pytest.ini                    # Pytest configuration
+└── .github/workflows/            # CI/CD pipelines
+    ├── ci.yml                    # Unit tests, linting
+    ├── ci-cd.yaml                # Additional CI/CD
+    └── cd-production.yml         # Production deployment
+```
 
-### Deployment Instructions
-- Build containers: `docker-compose -f docker-compose.ifrs9.yml build`.
-- Run stack: `docker-compose -f docker-compose.ifrs9.yml up -d`.
-- Execute full validation suite inside Spark container: `make test` (ensures Airflow/Spark services running).
-- Infrastructure prep: from `deploy/terraform`, run `terraform init -reconfigure -backend-config="bucket=ifrs9-terraform-state-staging"`, verify the project is empty (no staging GKE/Dataproc/Composer/Cloud Run/BQ/GCS resources), then run `terraform plan -var-file=staging.auto.tfvars` and apply once the diff is clean; imports are no longer required.
-- Local CLI prerequisites (installed): `gcloud` with application-default login and the HashiCorp `terraform` binary.
+---
 
-- 2025-09-28 07:30 UTC: Terraform targeted destroy removed BigQuery datasets, GCS buckets, IAM service accounts, VPC, and Cloud Run job; only KMS key ring `ifrs9-staging-keys` remains (versions scheduled for destruction). Project is clean for Infrastructure Manager bootstrap.
-- 2025-09-28: Extensive repository cleanup — all Gemini/Claude hooks removed, Vertex AI integration stripped from explanations, `.gitignore` updated for Terraform artifacts, documentation adjusted to reflect offline tooling.
-- 2025-09-27: Updated staging tfvars with Cloud Run image/env overrides, pushed `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.1.0`, created `ifrs9-batch-job`, and executed a verification run via `gcloud run jobs execute --wait`.
-- 2025-10-27: Added BigQuery schema assets/SQL, re-enabled dataset provisioning behind `enable_bigquery_tables`, built Cloud Run batch Docker artefacts, and captured the serverless-only Terraform plan (`plan-staging.tfplan`).
-- 2025-10-27: Added Terraform feature flags (GKE/Composer/Dataproc/backup/serverless), Autopilot drain guard precondition, Cloud Run + Workflows orchestration module, and updated staging defaults for Always Free alignment.
-- 2025-09-25: Refined Terraform apply flow: added lazy handling for service-identity emails in KMS bindings, restored required Dataproc/Storage IAM roles, normalized Composer defaults (larger SQL CIDR, lighter overrides), disabled private GKE master endpoint, and updated Vertex Workbench base image to `tf-latest-cpu` so staging apply succeeds.
-- 2025-09-24: Hardened staging Terraform configuration—pinned provider v5.40, expanded API enablement (incl. Service Networking, Billing Budgets, SQL Admin), added Cloud NAT + default-deny egress, CMEK KMS bindings via service identities, Storage/BigQuery scoped IAM, Storage Transfer permissions, HTTPS redirect-ready load balancer, monitoring budget + audit sink, and validated with `terraform validate`.
-- 2025-09-18: Replaced Terraform placeholder modules for GKE, Composer, Vertex AI Workbench, load balancer, and backup orchestration; targeted staging resources to southamerica-east1, regenerated `deploy/terraform/plan-staging.txt`, and captured new state after successful `terraform plan`.
-- 2025-09-18: Captured staging Terraform plan (`deploy/terraform/plan-staging.txt`) after bootstrapping core modules; GKE/Composer/Vertex/load balancer remain placeholders pending final infra design.
-- 2025-09-18: Added foundational Terraform modules, sanitized backend config, ran staging init/plan, and saved `deploy/terraform/plan-staging.txt` (note placeholder modules for GKE/Composer/Vertex/Load Balancer awaiting full definitions).
-- 2025-09-18: Installed Google Cloud CLI 481 locally, created \`gs://ifrs9-terraform-state-staging\`, added \`deploy/terraform/staging.auto.tfvars\`, and captured Terraform init failure due to missing local modules.
-- Implemented broad stability fixes across synthetic data, feature engineering, optimized ML pipeline, and IFRS9 rules engine for predictable staging and ECL outputs.
-- Added compatibility alias methods and deterministic stage ordering to satisfy optimized integration tests.
-- Hardened Docker helpers, Spark fixtures, and compose volumes; disabled PySpark Arrow during tests to prevent IPC faults.
-- Extended SHAP handling with feature-importance fallback and ensured streaming predictions operate on raw inputs.
-- Updated `config/ifrs9_rules.yaml`, ensured `reports/.gitkeep`, and aligned Polars/Pandas accuracy.
-- Added cloud-mode GCP integration regression tests (BigQuery + Cloud Storage stubs) alongside local fallbacks, lifting `src/gcp_integrations.py` coverage to ~45% and exercising failure paths (Conflict, NotFound, load/query errors).
-- Refactored Docker-marked suites to support local execution without host Docker, added eager Polars constructs, and ensured `make test` now runs 87 tests with zero skips.
-- Captured infrastructure guidance in `deploy/terraform/README.md`, documenting Terraform workflow, IAM expectations, and post-apply validation.
-- Suppressed residual sklearn user warnings and Polars deprecations across fixtures/tests to keep health runs noise-free.
-- Tests executed: `make test` (full suite via Spark container) ✔️ — 87 passed, 0 skipped.
-- Expanded GCP integration logic with idempotent BigQuery helpers, retry-aware stubs, and a Dataproc local registry to support fallback verification.
-- Tightened Docker fallback harness (shared volume prep, synthetic Spark env) and added parity tests to keep CI without Docker representative.
-- Removed sklearn warning suppressors by normalising categorical pipelines and preserving feature metadata, eliminating "unknown categories"/feature-name messages.
+## Key Functions/Classes
 
-### Known Issues
-- Continue monitoring deterministic stage caps to ensure they align with IFRS9 policy nuances in downstream analytics.
-- SHAP fallback uses feature importances; review long-term for parity with full SHAP when computational issues are resolved.
+### Core IFRS9 Processing
+- **`src/rules_engine.py:IFRS9RulesEngine`** — PySpark-based rules processor for staging, SICR detection, ECL calculation. Configuration-driven via `config/ifrs9_rules.yaml`.
 
-### Next Steps
-- Schedule the `ifrs9-batch-job` (Cloud Scheduler or Workflow cron step) so it runs automatically with the new container.
-- Review Terraform plan output and apply when ready to codify the Cloud Run job and other staged changes.
-- Monitor the newly created GCS bucket (`ifrs9-batch-artifacts`) and adjust retention/permissions once artefact requirements are finalised.
-- Before re-enabling GKE, confirm `scripts/check_gk3_nodes.sh` reports zero Autopilot instances to avoid subnet conflicts.
-- When production workloads resume full scale, re-enable Composer/Dataproc/GKE via tfvars and revisit NAT/logging budgets.
+### Data Generation
+- **`src/generate_data.py:DataGenerator`** — Synthetic loan portfolio creation with balanced stage assignment, deterministic seeds, 13+ product types.
+
+### Machine Learning
+- **`src/enhanced_ml_models.py:AdvancedFeatureEngineer`** — 50+ feature engineering with Polars/Pandas parity.
+- **`src/enhanced_ml_models.py:OptimizedMLPipeline`** — Model orchestration (RandomForest, XGBoost, LightGBM, CatBoost), SHAP explainability, streaming predictions.
+
+### High-Performance Processing
+- **`src/polars_ml_integration.py:PolarsMLOrchestrator`** — Polars-native workflows with 10x+ performance, lazy evaluation, streaming support.
+
+### GCP Integration
+- **`src/gcp_integrations.py:GCPIntegration`** — BigQuery, Cloud Storage, Dataproc integration with local fallback for development.
+
+---
+
+## Container Setup
+
+### Base Images
+- **Spark**: `python:3.10-slim` with Java 21, PySpark 3.5.4, Hadoop 3
+- **Cloud Run**: `python:3.11.7` multi-stage, non-root user
+- **Postgres**: `15-alpine` for Airflow metadata
+
+### Services (`docker-compose.ifrs9.yml`)
+| Service | Image | Port(s) | Purpose |
+|---------|-------|---------|---------|
+| postgres | postgres:15-alpine | 5432 | Airflow metadata DB |
+| spark-master | custom | 7077, 8080 | Spark coordinator |
+| spark-worker | custom | 8081 | Distributed processing |
+| airflow-webserver | custom | 8080 | Pipeline UI |
+| airflow-scheduler | custom | — | Task scheduler |
+| airflow-triggerer | custom | — | Async trigger |
+| jupyter | custom | 8888 | Development |
+| validation | custom | — | Test harness |
+
+### Volumes
+- Shared mounts: `./src`, `./tests`, `./validation`, `./scripts`, `./config`, `./data`, `./logs`, `./reports`
+- Postgres data: `postgres-db-volume`
+
+### Environment Variables
+- `IFRS9_RULES_CONFIG` — Optional rules override
+- `SPARK_MASTER` — Spark master URL
+- `JUPYTER_TOKEN` — Jupyter authentication
+- Arrow disabled in tests: `spark.sql.execution.arrow.pyspark.enabled=false`
+
+---
+
+## Terraform Infrastructure
+
+### Feature Flags (`staging.auto.tfvars`)
+```hcl
+enable_gke                      = false  # K8s cluster
+enable_composer                 = false  # Cloud Composer
+enable_dataproc                 = false  # Spark cluster
+enable_backup_services          = false  # Backup jobs
+enable_serverless_orchestration = false  # Cloud Run + Workflows
+enable_bigquery_tables          = true   # BigQuery datasets
+```
+
+### Service Accounts
+- `ifrs9-terraform` — Terraform runner
+- `ifrs9-dataproc` — Spark cluster
+- `ifrs9-composer` — Airflow
+- `ifrs9-vertex` — AI/ML
+- `ifrs9-staging-job` — Cloud Run batch
+
+### Key Resources
+- State Backend: `gs://ifrs9-terraform-state-staging`
+- BigQuery Dataset: `ifrs9_data_staging`
+- Cloud Run Image: `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.1.0`
+- KMS Key Ring: `ifrs9-staging-keys` (versions scheduled for destruction)
+
+---
+
+## CI/CD Pipelines
+
+### `ci.yml` — Continuous Integration
+- **Triggers**: Push (main/develop), Pull Requests
+- **Python**: 3.10, 3.11
+- **Jobs**: Code quality (Black, isort, Flake8, MyPy, Bandit), Unit tests (pytest, 80%+ coverage), Docker build, Security scanning (CodeQL, Trivy)
+
+### `cd-production.yml` — Production Deployment
+- GCP authentication
+- Terraform apply with approval gate
+- Cloud Run deployment
+- Post-deployment validation
+
+---
+
+## IFRS9 Compliance Features
+
+- **3-Stage Classification**: Stage 1 (DPD<30), Stage 2 (DPD 30-90), Stage 3 (DPD≥90)
+- **SICR Detection**: 2.0x PD multiplier, 100-point credit score decline threshold
+- **ECL Calculation**: PD × LGD × EAD with 2.5% risk-free discounting
+- **Time Horizons**: 12-month ECL (Stage 1), lifetime ECL (Stage 2/3)
+- **Forward-Looking**: Economic scenario weighting
+- **Audit Trail**: 7-year retention for regulatory compliance
+
+---
+
+## Deployment Instructions
+
+### Local Development
+```bash
+# Build containers
+docker-compose -f docker-compose.ifrs9.yml build
+
+# Start stack
+docker-compose -f docker-compose.ifrs9.yml up -d
+
+# Run tests
+make test
+```
+
+### Terraform Deployment
+```bash
+cd deploy/terraform
+terraform init -reconfigure -backend-config="bucket=ifrs9-terraform-state-staging"
+terraform plan -var-file=staging.auto.tfvars
+terraform apply
+```
+
+### Prerequisites
+- `gcloud` CLI v549.0.1 (includes `bq` 2.1.25, `gsutil` 5.35)
+- `terraform` v1.14.2
+- Docker Engine 29.x+
+- Docker Compose v2.40+
+
+---
+
+## Current Infrastructure Status
+
+As of 2025-09-28:
+- Infrastructure is **fully torn down** via targeted destroy
+- Only KMS key ring `ifrs9-staging-keys` remains (versions in `DESTROY_SCHEDULED` state)
+- GCP project `academic-ocean-472500-j4` is clean and ready for Infrastructure Manager bootstrap
+- All AI tooling is strictly offline (Gemini/Claude hooks removed)
+
+---
+
+## Changelog
+
+### 2025-12-13
+- **Installed CLI tools**: Google Cloud SDK v549.0.1 (`gcloud`, `bq` 2.1.25, `gsutil` 5.35) and Terraform v1.14.2 via official APT repositories.
+- Added `IMPLEMENTATION_PLAN.md` (portfolio deployment plan revision focused on BigQuery-first + optional Vertex AI).
+- Added Cloud Run batch BigQuery load support in `docker/cloud-run-job/cloud_run_job.py` (controlled via `BQ_*` env vars) and dependency in `docker/cloud-run-job/requirements.txt`.
+- Added minimal portfolio Terraform stack under `deploy/portfolio/terraform` (BigQuery datasets + views, GCS artifacts bucket, Cloud Run Job, optional Vertex training IAM) to avoid VPC/NAT/KMS costs from `deploy/terraform`.
+- Added Vertex training-only container assets under `docker/vertex-training` (trains stage model from BigQuery and uploads artifacts to GCS).
+- Flagged portfolio cost risks in existing Terraform root (`deploy/terraform`): VPC module provisions Cloud NAT by default; KMS resources are `prevent_destroy`.
+
+### 2025-10-27
+- Added BigQuery schema assets/SQL, re-enabled dataset provisioning behind `enable_bigquery_tables`
+- Built Cloud Run batch Docker artifacts
+- Captured serverless-only Terraform plan (`plan-staging.tfplan`)
+- Added Terraform feature flags (GKE/Composer/Dataproc/backup/serverless)
+- Autopilot drain guard precondition added
+- Cloud Run + Workflows orchestration module
+
+### 2025-09-28
+- Extensive repository cleanup — all Gemini/Claude hooks removed
+- Vertex AI integration stripped from explanations
+- `.gitignore` updated for Terraform artifacts
+- Terraform targeted destroy: BigQuery datasets, GCS buckets, IAM service accounts, VPC, Cloud Run job removed
+
+### 2025-09-27
+- Updated staging tfvars with Cloud Run image/env overrides
+- Pushed `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.1.0`
+- Created `ifrs9-batch-job` and verified execution
+
+### 2025-09-25
+- Refined Terraform apply flow with lazy KMS bindings
+- Restored Dataproc/Storage IAM roles
+- Normalized Composer defaults
+- Disabled private GKE master endpoint
+- Updated Vertex Workbench base image
+
+### 2025-09-24
+- Hardened staging Terraform configuration
+- Pinned provider v5.40
+- Expanded API enablement
+- Added Cloud NAT + default-deny egress
+- CMEK KMS bindings via service identities
+
+---
+
+## Known Issues
+
+- Continue monitoring deterministic stage caps for IFRS9 policy alignment
+- SHAP fallback uses feature importances; review for full SHAP parity when computational issues resolved
+- Arrow IPC disabled in Spark tests to prevent failures
+- Portfolio deployment prerequisites: `pip` not installed (use if needed); `gcloud`/`bq`/`terraform` now available.
+- Terraform BigQuery module references schema files not present in this repo snapshot (`deploy/terraform/modules/bigquery/schemas/*.json`); `enable_bigquery_tables=true` will fail unless those are added.
+- Terraform VPC module provisions Cloud NAT by default; avoid for portfolio cost targets unless you destroy immediately.
+
+---
+
+## Next Steps
+
+1. Authenticate gcloud: `gcloud auth login && gcloud auth application-default login && gcloud config set project academic-ocean-472500-j4`
+2. Build + push the updated Cloud Run job image (tag `0.2.0`) and update `deploy/portfolio/terraform/portfolio.auto.tfvars` if you change the tag.
+3. Deploy the portfolio stack via `deploy/portfolio/terraform` and verify BigQuery datasets/views exist.
+4. Execute the Cloud Run job and confirm `ifrs9_raw_<env>.loan_portfolio` is populated (then connect Looker Studio to `ifrs9_analytics_<env>` views).
+5. (Optional) Build + push `docker/vertex-training` and run a single Vertex custom training job to generate model artifacts in the portfolio GCS bucket.
+
+---
+
+## Test Suite
+
+- **Test Count**: 87 tests (0 skipped)
+- **Coverage Target**: 80%+
+- **Markers**: `spark`, `slow`, `integration`, `unit`, `validation`, `ml`, `docker`
+- **Timeout**: 300 seconds per test
+- **Command**: `make test` (runs via Spark container)

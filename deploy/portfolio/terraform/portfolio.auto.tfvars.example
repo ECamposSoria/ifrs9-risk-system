@@ -1,0 +1,26 @@
+# Portfolio demo defaults (copy to portfolio.auto.tfvars and edit)
+
+project_id = "<YOUR_GCP_PROJECT_ID>"
+
+# Keep data in your preferred region
+region           = "southamerica-east1"
+bigquery_location = "southamerica-east1"
+
+# Cloud Run free-tier friendly region for demos
+cloud_run_region = "us-central1"
+
+# Dataset suffixes -> ifrs9_raw_<env>, ifrs9_analytics_<env>, ifrs9_ml_<env>
+environment = "staging"
+
+# Build + push this image first (pinned tag; no :latest)
+cloud_run_job_image = "gcr.io/<YOUR_GCP_PROJECT_ID>/ifrs9-cloud-run-job:0.2.0"
+
+ifrs9_record_count = 5000
+ifrs9_seed         = 42
+
+# Artifacts bucket retention (days)
+artifact_bucket_retention_days = 30
+
+# Create Vertex training-only IAM (no endpoints, no batch prediction)
+enable_vertex_training_iam = true
+

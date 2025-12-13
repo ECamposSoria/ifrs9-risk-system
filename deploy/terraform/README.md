@@ -2,6 +2,8 @@
 
 This guide bridges the gap between the local Docker workflow and a managed Google Cloud Platform (GCP) deployment. It documents prerequisites, IAM expectations, and the workflow for planning and applying the Terraform configuration in `deploy/terraform`.
 
+For a **minimal, portfolio-friendly** Terraform stack (no VPC/NAT/CMEK), see `deploy/portfolio/terraform/README.md`.
+
 ## Prerequisites
 - **GCP project** with billing enabled.
 - **Terraform state bucket** (`var.terraform_state_bucket`) created manually with versioning enabled (recommended). Grant the Terraform service account `roles/storage.objectAdmin`.

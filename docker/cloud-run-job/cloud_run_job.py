@@ -38,6 +38,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency handling
     storage = None
 
+try:
+    from google.cloud import bigquery  # type: ignore
+except Exception:  # pragma: no cover - optional dependency handling
+    bigquery = None
+
 
 @dataclass
 class StageSummary:
@@ -133,6 +138,51 @@ def maybe_upload_to_gcs(paths: dict, bucket_name: Optional[str], object_prefix: 
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(path)
 
+def _resolve_bigquery_write_disposition(value: str) -> str:
+    if bigquery is None:
+        return value
+    candidate = value.strip().upper()
+    return getattr(bigquery.WriteDisposition, candidate, bigquery.WriteDisposition.WRITE_TRUNCATE)
+
+
+def maybe_write_to_bigquery(
+    df: pd.DataFrame,
+    project_id: Optional[str],
+    dataset_id: Optional[str],
+    table_id: str,
+    *,
+    location: Optional[str] = None,
+    write_disposition: str = "WRITE_TRUNCATE",
+) -> None:
+    if not dataset_id:
+        logging.info("No BigQuery dataset configured; skipping BigQuery load.")
+        return
+    if bigquery is None:
+        logging.warning("google-cloud-bigquery not available; skipping load to dataset %s", dataset_id)
+        return
+
+    client = bigquery.Client(project=project_id) if project_id else bigquery.Client()
+    resolved_project = project_id or client.project
+    table_ref = f"{resolved_project}.{dataset_id}.{table_id}"
+
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=_resolve_bigquery_write_disposition(write_disposition),
+        schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+    )
+
+    logging.info("Loading %d rows to BigQuery table %s", len(df), table_ref)
+    try:
+        load_job = client.load_table_from_dataframe(
+            df,
+            table_ref,
+            job_config=job_config,
+            location=location,
+        )
+    except TypeError:
+        load_job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
+    load_job.result()
+    logging.info("BigQuery load complete: %s", table_ref)
+
 
 def run_job() -> None:
     record_count = int(os.getenv("IFRS9_RECORD_COUNT", "5000"))
@@ -140,11 +190,25 @@ def run_job() -> None:
     gcs_bucket = os.getenv("GCS_OUTPUT_BUCKET")
     gcs_prefix = os.getenv("GCS_OBJECT_PREFIX", "ifrs9-batch")
 
+    bq_project = os.getenv("BQ_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT_ID")
+    bq_dataset = os.getenv("BQ_DATASET")
+    bq_table = os.getenv("BQ_TABLE", "loan_portfolio")
+    bq_location = os.getenv("BQ_LOCATION")
+    bq_write_disposition = os.getenv("BQ_WRITE_DISPOSITION", "WRITE_TRUNCATE")
+
     portfolio = generate_portfolio(record_count)
     summary = summarise_portfolio(portfolio)
 
     outputs = write_local_outputs(portfolio, summary, output_dir)
     maybe_upload_to_gcs(outputs, gcs_bucket, gcs_prefix)
+    maybe_write_to_bigquery(
+        portfolio,
+        bq_project,
+        bq_dataset,
+        bq_table,
+        location=bq_location,
+        write_disposition=bq_write_disposition,
+    )
 
     logging.info("Job completed successfully")
 

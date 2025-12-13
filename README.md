@@ -40,6 +40,12 @@ A comprehensive, enterprise-grade IFRS9 credit risk management system designed f
 - 8GB+ RAM
 - 10GB+ free disk space
 
+## ☁️ GCP Deployment (Portfolio)
+
+Two Terraform options exist:
+- **Portfolio/minimal (recommended for demos)**: `deploy/portfolio/terraform/README.md`
+- **Production/complete**: `deploy/terraform/README.md`
+
 ### ⚠️ Important Notes
 - **Project-specific naming**: All Docker files use IFRS9-specific names to avoid conflicts
 - **Dynamic ports**: Uses environment variables for port configuration 
