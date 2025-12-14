@@ -56,6 +56,7 @@ resource "google_bigquery_table" "loan_portfolio" {
     { name = "dti_ratio", type = "FLOAT64", mode = "NULLABLE" },
     { name = "ltv_ratio", type = "FLOAT64", mode = "NULLABLE" },
     { name = "days_past_due", type = "INT64", mode = "NULLABLE" },
+    { name = "employment_length", type = "INT64", mode = "NULLABLE" },
     { name = "loan_type", type = "STRING", mode = "NULLABLE" },
     { name = "region", type = "STRING", mode = "NULLABLE" },
     { name = "provision_stage", type = "INT64", mode = "NULLABLE" },
