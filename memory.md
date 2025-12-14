@@ -1,7 +1,7 @@
 # System Memory
 
-## Last Updated: 2025-12-13
-## Version: 0.9.0
+## Last Updated: 2025-12-14
+## Version: 1.0.0
 
 ---
 
@@ -64,6 +64,11 @@
 │   │   ├── Dockerfile            # Multi-stage build
 │   │   ├── cloud_run_job.py      # Entrypoint script
 │   │   └── requirements.txt
+│   ├── vertex-training/          # Vertex AI training container
+│   │   ├── Dockerfile            # Multi-stage build
+│   │   ├── train.py              # Model training script
+│   │   ├── predict.py            # Batch prediction script
+│   │   └── requirements.txt
 │   ├── airflow/
 │   │   └── Dockerfile.ifrs9-airflow
 │   ├── jupyter/
@@ -109,7 +114,12 @@
 │   └── LocalPipeline.ipynb
 ├── data/                         # Data directories
 │   ├── raw/
-│   └── processed/
+│   ├── processed/
+│   └── exports/                  # Exported artifacts for preservation
+│       ├── loan_portfolio.csv    # 5000 synthetic loans
+│       ├── predictions.csv       # ML stage predictions
+│       ├── model.joblib          # Trained RandomForest model
+│       └── metadata.json         # Model training metadata
 ├── docs/                         # Documentation
 ├── scripts/                      # Utility scripts
 ├── reports/                      # Generated reports
@@ -273,6 +283,28 @@ As of 2025-09-28:
 
 ## Changelog
 
+### 2025-12-14
+- **Deployed full IFRS9 portfolio stack via GCP Infrastructure Manager** (27 resources):
+  - 3 BigQuery datasets: `ifrs9_raw_staging`, `ifrs9_analytics_staging`, `ifrs9_ml_staging`
+  - 5 analytics views: `ecl_by_stage`, `risk_metrics`, `geographic_distribution`, `product_analysis`, `credit_score_bands`
+  - GCS bucket: `academic-ocean-472500-j4-ifrs9-portfolio-artifacts-staging`
+  - Cloud Run job: `ifrs9-portfolio-batch-staging`
+  - IAM service account for Vertex AI training
+- **Executed Cloud Run job** — populated `loan_portfolio` table with 5000 synthetic loans
+- **Trained ML model on Vertex AI**:
+  - Container: `gcr.io/academic-ocean-472500-j4/ifrs9-vertex-training:0.1.0`
+  - Model: RandomForestClassifier (100 estimators)
+  - Artifacts stored: `gs://academic-ocean-472500-j4-ifrs9-portfolio-artifacts-staging/models/ifrs9_stage_model/20251214T024151Z/`
+  - Accuracy: ~94%
+- **Ran batch predictions** — created `loan_portfolio_predictions` table with ML stage predictions and probabilities
+- **Created Looker Studio dashboard** with 6 data sources (5 views + predictions table)
+- **Exported data for preservation**:
+  - `data/exports/loan_portfolio.csv` (5000 rows, 1.4 MB)
+  - `data/exports/predictions.csv` (5000 rows, 599 KB)
+  - `data/exports/model.joblib` (5.1 MB RandomForest model)
+  - `data/exports/metadata.json` (training metadata)
+  - `docs/Informe_ifrs9.pdf` (Looker Studio dashboard export)
+
 ### 2025-12-13
 - **Installed CLI tools**: Google Cloud SDK v549.0.1 (`gcloud`, `bq` 2.1.25, `gsutil` 5.35) and Terraform v1.14.2 via official APT repositories.
 - Added `IMPLEMENTATION_PLAN.md` (portfolio deployment plan revision focused on BigQuery-first + optional Vertex AI).
@@ -329,11 +361,19 @@ As of 2025-09-28:
 
 ## Next Steps
 
-1. Authenticate gcloud: `gcloud auth login && gcloud auth application-default login && gcloud config set project academic-ocean-472500-j4`
-2. Build + push the updated Cloud Run job image (tag `0.2.0`) and update `deploy/portfolio/terraform/portfolio.auto.tfvars` if you change the tag.
-3. Deploy the portfolio stack via `deploy/portfolio/terraform` and verify BigQuery datasets/views exist.
-4. Execute the Cloud Run job and confirm `ifrs9_raw_<env>.loan_portfolio` is populated (then connect Looker Studio to `ifrs9_analytics_<env>` views).
-5. (Optional) Build + push `docker/vertex-training` and run a single Vertex custom training job to generate model artifacts in the portfolio GCS bucket.
+1. ✅ ~~Authenticate gcloud~~ — Done
+2. ✅ ~~Build + push Cloud Run job image~~ — `gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.2.1`
+3. ✅ ~~Deploy portfolio stack~~ — 27 resources via Infrastructure Manager
+4. ✅ ~~Execute Cloud Run job~~ — `loan_portfolio` populated (5000 rows)
+5. ✅ ~~Build + push Vertex training container~~ — `gcr.io/academic-ocean-472500-j4/ifrs9-vertex-training:0.1.0`
+6. ✅ ~~Train ML model~~ — RandomForest, 94% accuracy
+7. ✅ ~~Run batch predictions~~ — `loan_portfolio_predictions` created
+8. ✅ ~~Create Looker Studio dashboard~~ — Connected to all 6 data sources
+9. ✅ ~~Export data for preservation~~ — CSVs, model, metadata, PDF
+
+**Remaining (optional)**:
+- Destroy GCP resources via Infrastructure Manager to avoid ongoing costs
+- Commit exported data to GitHub repository
 
 ---
 

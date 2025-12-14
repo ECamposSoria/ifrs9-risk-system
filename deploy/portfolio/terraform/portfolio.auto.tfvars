@@ -9,7 +9,7 @@ cloud_run_region = "us-central1"
 environment      = "staging"
 
 # Build + push this image first (pinned tag; no :latest)
-cloud_run_job_image = "gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.2.0"
+cloud_run_job_image = "gcr.io/academic-ocean-472500-j4/ifrs9-cloud-run-job:0.2.1"
 
 ifrs9_record_count = 5000
 ifrs9_seed         = 42

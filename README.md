@@ -1,341 +1,433 @@
 # IFRS9 Risk Management System
 
 [![CI/CD Pipeline](https://github.com/your-org/ifrs9-risk-system/workflows/CI/badge.svg)](https://github.com/your-org/ifrs9-risk-system/actions)
-[![Security Scan](https://github.com/your-org/ifrs9-risk-system/workflows/Security/badge.svg)](https://github.com/your-org/ifrs9-risk-system/security)
-[![Code Coverage](https://codecov.io/gh/your-org/ifrs9-risk-system/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/ifrs9-risk-system)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🏦 Overview
+A production-grade IFRS9 credit risk management system implementing Expected Credit Loss (ECL) calculation, ML-based stage prediction, and analytics dashboards on Google Cloud Platform.
 
-A comprehensive, enterprise-grade IFRS9 credit risk management system designed for financial institutions to ensure regulatory compliance while providing advanced analytics and real-time monitoring capabilities.
+## Quick Links
 
-### 🎯 Key Features
+- [View Static Results](#-static-results-no-deployment-required) - Exported data, model, and dashboard
+- [Reproduce on GCP](#-reproduce-on-gcp) - Full deployment instructions
+- [Local Development](#-local-development) - Docker-based setup
 
-- **IFRS9 Compliance**: Automated staging classification and ECL calculations
-- **Advanced ML Models**: XGBoost, LightGBM, and CatBoost for risk prediction
-- **Explainability**: Rule-based narratives with SHAP-driven model transparency
-- **Real-time Dashboards**: Looker Studio integration with 7 comprehensive dashboards
-- **Cloud-Native**: Google Cloud Platform with auto-scaling capabilities
-- **Production-Ready**: Kubernetes deployment with monitoring and alerting
+---
 
-## 🏗️ Architecture
+## Overview
+
+This system demonstrates a complete **Data Engineering + Data Science + Analytics** pipeline for IFRS9 compliance:
 
 ```
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   Data Sources  │────▶│  Validation  │────▶│  IFRS9 Engine   │
-│  (CSV/Parquet)  │     │   (Pandera)  │     │   (PySpark)     │
-└─────────────────┘     └──────────────┘     └─────────────────┘
-                                                      │
-                                                      ▼
-┌─────────────────┐     ┌──────────────┐     ┌─────────────────┐
-│   ML Models     │◀────│   Airflow    │────▶│    Reports      │
-│  (Scikit-learn) │     │ (Orchestrator)│     │  (Dashboard)    │
-└─────────────────┘     └──────────────┘     └─────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐    ┌──────────────┐
+│  Data Generator │───▶│  Cloud Run Job   │───▶│   BigQuery      │───▶│ Looker Studio│
+│  (Synthetic)    │    │  (Batch Load)    │    │   (Analytics)   │    │  (Dashboard) │
+└─────────────────┘    └──────────────────┘    └─────────────────┘    └──────────────┘
+                                                       │
+                                                       ▼
+                                               ┌──────────────────┐
+                                               │   Vertex AI      │
+                                               │  (ML Training)   │
+                                               └──────────────────┘
+                                                       │
+                                                       ▼
+                                               ┌──────────────────┐
+                                               │ Batch Predictions│
+                                               │  (Stage + Probs) │
+                                               └──────────────────┘
 ```
 
-## 🚀 Quick Start
+### Key Components
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Data Generation | Python + Cloud Run | 5000 synthetic loans with IFRS9 staging |
+| Storage | BigQuery | 3 datasets (raw, analytics, ml) + 5 views |
+| ML Training | Vertex AI + scikit-learn | RandomForest stage classifier (~94% accuracy) |
+| Predictions | Batch job | ML predictions vs rules-based comparison |
+| Visualization | Looker Studio | 6 interactive dashboards |
+| Infrastructure | Terraform + Infrastructure Manager | Fully automated GCP deployment |
+
+---
+
+## Static Results (No Deployment Required)
+
+All results have been exported and committed to this repository. You can explore them without deploying anything.
+
+### Exported Data
+
+| File | Description | Size |
+|------|-------------|------|
+| [`data/exports/loan_portfolio.csv`](data/exports/loan_portfolio.csv) | 5000 synthetic loans with IFRS9 staging | 1.4 MB |
+| [`data/exports/predictions.csv`](data/exports/predictions.csv) | ML predictions + probabilities per stage | 599 KB |
+| [`data/exports/model.joblib`](data/exports/model.joblib) | Trained RandomForest model | 5.1 MB |
+| [`data/exports/metadata.json`](data/exports/metadata.json) | Training metadata (accuracy, features) | 1.6 KB |
+
+### Dashboard PDF
+
+The Looker Studio dashboard has been exported as a PDF:
+
+- [`docs/Informe_ifrs9.pdf`](docs/Informe_ifrs9.pdf) - Complete dashboard with all visualizations
+
+### Load the Model Locally
+
+```python
+import joblib
+import pandas as pd
+
+# Load the trained model
+model = joblib.load("data/exports/model.joblib")
+
+# Load sample data
+df = pd.read_csv("data/exports/loan_portfolio.csv")
+
+# Feature columns used for prediction
+FEATURES = [
+    "loan_amount", "interest_rate", "term_months", "credit_score",
+    "days_past_due", "dti_ratio", "ltv_ratio", "employment_length"
+]
+
+# Make predictions
+X = df[FEATURES].fillna(0)
+predictions = model.predict(X)
+probabilities = model.predict_proba(X)
+
+print(f"Model type: {type(model).__name__}")
+print(f"Predictions shape: {predictions.shape}")
+print(f"Stage distribution: {pd.Series(predictions).value_counts().to_dict()}")
+```
+
+### Explore Predictions
+
+```python
+import pandas as pd
+
+# Load predictions with ML probabilities
+predictions = pd.read_csv("data/exports/predictions.csv")
+
+# Compare ML vs Rules-based staging
+comparison = predictions.groupby(["original_stage", "ml_predicted_stage"]).size().unstack(fill_value=0)
+print("ML vs Rules Confusion Matrix:")
+print(comparison)
+
+# Check prediction confidence
+print("\nAverage probability by predicted stage:")
+for stage in [1, 2, 3]:
+    col = f"ml_prob_stage_{stage}"
+    if col in predictions.columns:
+        avg_prob = predictions[predictions["ml_predicted_stage"] == stage][col].mean()
+        print(f"  Stage {stage}: {avg_prob:.2%}")
+```
+
+---
+
+## Reproduce on GCP
+
+Follow these steps to deploy the full infrastructure and reproduce all results.
 
 ### Prerequisites
+
+- Google Cloud account with billing enabled
+- `gcloud` CLI installed and authenticated
+- `terraform` >= 1.5.0 installed
+- Docker installed (for building containers)
+
+### 1. Authenticate with GCP
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### 2. Build and Push Docker Images
+
+```bash
+# Cloud Run batch job (data generation + BigQuery load)
+docker build -t gcr.io/YOUR_PROJECT_ID/ifrs9-cloud-run-job:0.2.1 \
+  -f docker/cloud-run-job/Dockerfile .
+docker push gcr.io/YOUR_PROJECT_ID/ifrs9-cloud-run-job:0.2.1
+
+# Vertex AI training container
+docker build -t gcr.io/YOUR_PROJECT_ID/ifrs9-vertex-training:0.1.0 \
+  -f docker/vertex-training/Dockerfile .
+docker push gcr.io/YOUR_PROJECT_ID/ifrs9-vertex-training:0.1.0
+```
+
+### 3. Update Terraform Variables
+
+Edit `deploy/portfolio/terraform/portfolio.auto.tfvars`:
+
+```hcl
+project_id          = "YOUR_PROJECT_ID"
+region              = "southamerica-east1"      # or your preferred region
+bigquery_location   = "southamerica-east1"
+cloud_run_region    = "us-central1"             # Cloud Run region
+environment         = "staging"
+
+cloud_run_job_image = "gcr.io/YOUR_PROJECT_ID/ifrs9-cloud-run-job:0.2.1"
+
+ifrs9_record_count = 5000
+ifrs9_seed         = 42
+
+enable_vertex_training_iam = true
+```
+
+### 4. Deploy Infrastructure
+
+**Option A: Using GCP Infrastructure Manager (recommended)**
+
+```bash
+cd deploy/portfolio/terraform
+
+# Create tarball for Infrastructure Manager
+tar -czvf ../portfolio-terraform.tar.gz .
+
+# Upload to GCS
+gsutil cp ../portfolio-terraform.tar.gz gs://YOUR_BUCKET/terraform/
+
+# Create deployment via Infrastructure Manager
+gcloud infra-manager deployments apply ifrs9-portfolio-staging \
+  --location=us-central1 \
+  --service-account=projects/YOUR_PROJECT_ID/serviceAccounts/YOUR_SA@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --git-source-repo=gs://YOUR_BUCKET/terraform/portfolio-terraform.tar.gz \
+  --input-values=project_id=YOUR_PROJECT_ID
+```
+
+**Option B: Direct Terraform**
+
+```bash
+cd deploy/portfolio/terraform
+terraform init
+terraform plan -var-file=portfolio.auto.tfvars
+terraform apply -var-file=portfolio.auto.tfvars
+```
+
+### 5. Run Data Generation Job
+
+```bash
+gcloud run jobs execute ifrs9-portfolio-batch-staging \
+  --region=us-central1 \
+  --wait
+```
+
+Verify data in BigQuery:
+```bash
+bq query --use_legacy_sql=false \
+  "SELECT COUNT(*) as row_count FROM \`YOUR_PROJECT_ID.ifrs9_raw_staging.loan_portfolio\`"
+```
+
+### 6. Train ML Model on Vertex AI
+
+```bash
+gcloud ai custom-jobs create \
+  --region=us-central1 \
+  --display-name="ifrs9-stage-training" \
+  --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,container-image-uri=gcr.io/YOUR_PROJECT_ID/ifrs9-vertex-training:0.1.0 \
+  --args="--project-id=YOUR_PROJECT_ID" \
+  --args="--bq-dataset=ifrs9_raw_staging" \
+  --args="--bq-table=loan_portfolio" \
+  --args="--output-bucket=YOUR_PROJECT_ID-ifrs9-portfolio-artifacts-staging" \
+  --args="--output-prefix=models/ifrs9_stage_model"
+```
+
+### 7. Run Batch Predictions
+
+```bash
+gcloud ai custom-jobs create \
+  --region=us-central1 \
+  --display-name="ifrs9-batch-predictions" \
+  --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,container-image-uri=gcr.io/YOUR_PROJECT_ID/ifrs9-vertex-training:0.1.0 \
+  --args="predict.py" \
+  --args="--project-id=YOUR_PROJECT_ID" \
+  --args="--model-bucket=YOUR_PROJECT_ID-ifrs9-portfolio-artifacts-staging" \
+  --args="--model-prefix=models/ifrs9_stage_model" \
+  --args="--bq-dataset=ifrs9_raw_staging" \
+  --args="--output-dataset=ifrs9_analytics_staging"
+```
+
+### 8. Connect Looker Studio
+
+1. Go to [Looker Studio](https://lookerstudio.google.com/)
+2. Create new report
+3. Add BigQuery data sources:
+   - `ifrs9_analytics_staging.ecl_by_stage`
+   - `ifrs9_analytics_staging.risk_metrics`
+   - `ifrs9_analytics_staging.geographic_distribution`
+   - `ifrs9_analytics_staging.product_analysis`
+   - `ifrs9_analytics_staging.credit_score_bands`
+   - `ifrs9_analytics_staging.loan_portfolio_predictions`
+
+### 9. Export Results
+
+```bash
+# Export CSVs
+mkdir -p data/exports
+
+bq query --use_legacy_sql=false --format=csv --max_rows=10000 \
+  "SELECT * FROM \`YOUR_PROJECT_ID.ifrs9_raw_staging.loan_portfolio\`" \
+  > data/exports/loan_portfolio.csv
+
+bq query --use_legacy_sql=false --format=csv --max_rows=10000 \
+  "SELECT * FROM \`YOUR_PROJECT_ID.ifrs9_analytics_staging.loan_portfolio_predictions\`" \
+  > data/exports/predictions.csv
+
+# Download model artifacts
+gsutil cp gs://YOUR_PROJECT_ID-ifrs9-portfolio-artifacts-staging/models/ifrs9_stage_model/*/model.joblib data/exports/
+gsutil cp gs://YOUR_PROJECT_ID-ifrs9-portfolio-artifacts-staging/models/ifrs9_stage_model/*/metadata.json data/exports/
+```
+
+### 10. Clean Up (Avoid Costs)
+
+```bash
+# Delete via Infrastructure Manager
+gcloud infra-manager deployments delete ifrs9-portfolio-staging \
+  --location=us-central1
+
+# Or via Terraform
+cd deploy/portfolio/terraform
+terraform destroy -var-file=portfolio.auto.tfvars
+```
+
+---
+
+## Local Development
+
+For local development and testing without GCP.
+
+### Prerequisites
+
 - Docker and Docker Compose
 - 8GB+ RAM
 - 10GB+ free disk space
 
-## ☁️ GCP Deployment (Portfolio)
+### Quick Start
 
-Two Terraform options exist:
-- **Portfolio/minimal (recommended for demos)**: `deploy/portfolio/terraform/README.md`
-- **Production/complete**: `deploy/terraform/README.md`
-
-### ⚠️ Important Notes
-- **Project-specific naming**: All Docker files use IFRS9-specific names to avoid conflicts
-- **Dynamic ports**: Uses environment variables for port configuration 
-- **Dependency compatibility**: Optimized versions to resolve PySpark/Airflow conflicts
-- **Staged installation**: Dependencies installed in stages to prevent conflicts
-
-### Installation
-
-1. **Clone the repository**
 ```bash
+# Clone and setup
 git clone https://github.com/yourusername/ifrs9-risk-system.git
 cd ifrs9-risk-system
-```
 
-2. **Set up environment**
-```bash
+# Build and start services
 make setup
-```
-This will:
-- Copy `.env.example` to `.env`
-- Create necessary directories
-- Build Docker images
-
-3. **Initialize Airflow**
-```bash
-make init-airflow
-```
-
-4. **Start all services**
-```bash
 make up
-```
-This uses the renamed `docker-compose.ifrs9.yml` file.
 
-5. **Check service ports**
-```bash
+# Check service ports
 make show-ports
 ```
 
-You'll see output like:
-```
-Service Ports:
-================================
-jupyter          0.0.0.0:32768->8888/tcp
-airflow-webserver 0.0.0.0:32769->8080/tcp
-spark-master     0.0.0.0:32770->8080/tcp
-================================
-Access URLs:
-Jupyter Lab: http://localhost:32768 (password: ifrs9)
-Airflow UI:  http://localhost:32769 (user: airflow, password: airflow)
-Spark UI:    http://localhost:32770
-```
+### Services
 
-## 📁 Project Structure
-
-```
-ifrs9-risk-system/
-├── data/                   # Data directory
-│   ├── raw/               # Input data
-│   └── processed/         # Pipeline outputs
-├── notebooks/             # Jupyter notebooks
-│   ├── EDA.ipynb         # Exploratory Data Analysis
-│   └── LocalPipeline.ipynb # Local pipeline testing
-├── dags/                  # Airflow DAGs
-│   └── ifrs9_pipeline.py # Main pipeline DAG
-├── src/                   # Source code
-│   ├── generate_data.py  # Synthetic data generator
-│   ├── rules_engine.py   # IFRS9 PySpark engine
-│   ├── validation.py     # Data validation
-│   └── ml_model.py       # ML classifiers
-├── tests/                 # Unit tests
-│   └── test_rules.py     # Rules engine tests
-├── docker/                # Docker configurations
-│   ├── airflow/          # Airflow Dockerfile
-│   └── jupyter/          # Jupyter Dockerfile
-├── docker-compose.yml     # Service orchestration
-├── Makefile              # Utility commands
-└── README.md             # This file
-```
-
-## 🔧 Usage
-
-### Generate Synthetic Data
-```bash
-make generate-data
-```
+| Service | Port | Credentials |
+|---------|------|-------------|
+| Jupyter Lab | Dynamic | Token: `ifrs9` |
+| Airflow UI | Dynamic | `airflow` / `airflow` |
+| Spark Master UI | Dynamic | - |
 
 ### Run Tests
+
 ```bash
 make test
 ```
 
-### Run Linting
-```bash
-make lint
+---
+
+## Project Structure
+
+```
+ifrs9-risk-system/
+├── src/                              # Core Python modules
+│   ├── rules_engine.py               # IFRS9 PySpark rules
+│   ├── generate_data.py              # Synthetic data generator
+│   ├── enhanced_ml_models.py         # Advanced ML (XGBoost/LightGBM)
+│   └── gcp_integrations.py           # GCP BigQuery/GCS integration
+│
+├── docker/
+│   ├── cloud-run-job/                # Cloud Run batch container
+│   │   ├── Dockerfile
+│   │   ├── cloud_run_job.py          # Data generation + BQ load
+│   │   └── requirements.txt
+│   └── vertex-training/              # Vertex AI container
+│       ├── Dockerfile
+│       ├── train.py                  # Model training script
+│       ├── predict.py                # Batch prediction script
+│       └── requirements.txt
+│
+├── deploy/
+│   └── portfolio/terraform/          # Minimal GCP infrastructure
+│       ├── main.tf                   # Provider + APIs
+│       ├── bigquery.tf               # Datasets + tables
+│       ├── views.tf                  # Analytics views
+│       ├── cloud-run-job.tf          # Batch job
+│       ├── storage.tf                # GCS bucket
+│       └── portfolio.auto.tfvars     # Configuration
+│
+├── data/
+│   └── exports/                      # Exported results
+│       ├── loan_portfolio.csv        # Raw loan data
+│       ├── predictions.csv           # ML predictions
+│       ├── model.joblib              # Trained model
+│       └── metadata.json             # Training metadata
+│
+├── docs/
+│   └── Informe_ifrs9.pdf             # Dashboard export
+│
+├── tests/                            # Test suite (87 tests)
+├── notebooks/                        # Jupyter notebooks
+├── config/                           # Configuration files
+└── memory.md                         # Project memory/changelog
 ```
 
-### Format Code
-```bash
-make format
-```
+---
 
-### Access Services
-
-#### Jupyter Lab
-Navigate to `http://localhost:<JUPYTER_PORT>` and use token `ifrs9`.
-
-Example notebooks:
-- **EDA.ipynb**: Explore the synthetic loan portfolio
-- **LocalPipeline.ipynb**: Run the IFRS9 pipeline locally
-
-#### Airflow UI
-Navigate to `http://localhost:<AIRFLOW_PORT>` and login with:
-- Username: `airflow`
-- Password: `airflow`
-
-Enable and trigger the `ifrs9_credit_risk_pipeline` DAG.
-
-#### Spark UI
-Monitor Spark jobs at `http://localhost:<SPARK_MASTER_UI_PORT>`.
-
-## 📊 IFRS9 Implementation
+## IFRS9 Implementation
 
 ### Stage Classification
-- **Stage 1**: Performing loans (DPD < 30 days)
-- **Stage 2**: Underperforming loans (30 ≤ DPD < 90 days or significant credit risk increase)
-- **Stage 3**: Non-performing loans (DPD ≥ 90 days)
 
-### ECL Calculation
+| Stage | Criteria | ECL Horizon |
+|-------|----------|-------------|
+| Stage 1 | Performing (DPD < 30) | 12-month ECL |
+| Stage 2 | Underperforming (30 <= DPD < 90) | Lifetime ECL |
+| Stage 3 | Non-performing (DPD >= 90) | Lifetime ECL |
+
+### ECL Formula
+
 ```
 ECL = PD × LGD × EAD
 
 Where:
-- PD: Probability of Default
-- LGD: Loss Given Default
-- EAD: Exposure at Default
+- PD:  Probability of Default (credit score + DPD based)
+- LGD: Loss Given Default (collateral adjusted)
+- EAD: Exposure at Default (outstanding balance)
 ```
 
-### Risk Parameters
-- **12-month ECL** for Stage 1 loans
-- **Lifetime ECL** for Stage 2 and 3 loans
-- Dynamic PD based on credit score and days past due
-- LGD adjusted for collateral coverage
+### ML Model
 
-## 🤖 Machine Learning Models
-
-### Stage Classifier
-- **Algorithm**: Random Forest Classifier
-- **Features**: Credit score, DPD, LTV ratio, debt-to-income, etc.
-- **Performance**: ~85% accuracy on synthetic data
-
-### PD Predictor
-- **Algorithm**: Gradient Boosting Regressor
-- **Output**: Probability of default (0-1)
-- **Validation**: MAE < 0.05 on test set
-
-## ☁️ GCP Integration
-
-### Configuration
-Set GCP environment variables in `.env`:
-```bash
-GCP_PROJECT_ID=your-project-id
-GCP_BUCKET_NAME=your-bucket
-GCP_DATASET_ID=your-dataset
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
-```
-
-### Deployment
-```bash
-make deploy-gcp  # Coming soon
-```
-
-## 🧪 Testing
-
-Run all tests:
-```bash
-make test
-```
-
-Run specific test:
-```bash
-docker-compose exec jupyter python -m pytest tests/test_rules.py -v
-```
-
-## 📝 Development
-
-### Dependency Management
-The project uses carefully selected dependency versions to avoid conflicts:
-- **PyArrow**: `>=6.0.0,<7.0.0` (compatible with older Airflow providers)
-- **PySpark**: `>=3.4.0,<3.5.0` (matches PyArrow compatibility)  
-- **Google Cloud**: Versions under 3.0 to prevent BigQuery conflicts
-- **Airflow Providers**: Compatible with Airflow 2.6-2.8 range
-
-### Docker Architecture
-- **Dockerfile.ifrs9-spark**: Main Spark/Python environment
-- **Dockerfile.ifrs9-airflow**: Airflow with PySpark integration
-- **Dockerfile.ifrs9-jupyter**: Jupyter Lab with ML libraries
-- **docker-compose.ifrs9.yml**: Orchestrates all services with dynamic ports
-
-### Adding New Features
-1. Create feature branch
-2. Implement changes in `src/`
-3. Add tests in `tests/`
-4. Update notebooks if needed
-5. Run `make lint` and `make format`
-6. Submit pull request
-
-### Code Style
-- Python: Black formatter, Flake8 linter
-- Line length: 100 characters
-- Type hints encouraged
-- Comprehensive docstrings required
-
-## 🛠️ Makefile Commands
-
-| Command | Description |
-|---------|-------------|
-| `make help` | Show all available commands |
-| `make setup` | Initial project setup |
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make restart` | Restart all services |
-| `make logs` | Show logs for all services |
-| `make test` | Run all tests |
-| `make lint` | Run linting checks |
-| `make format` | Format code with black |
-| `make clean` | Clean temporary files |
-| `make show-ports` | Display service ports |
-
-## 📊 Monitoring
-
-### Logs
-```bash
-make logs  # All services
-make logs-service SERVICE=jupyter  # Specific service
-```
-
-### Health Checks
-All services include health checks. Check status:
-```bash
-make ps
-```
-
-## 🔒 Security
-
-- All sensitive data stored in `.env` (not committed)
-- Airflow Fernet key for encryption
-- Network isolation between services
-- No hardcoded credentials
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
-## 📚 Documentation
-
-### Resources
-- [IFRS9 Standard](https://www.ifrs.org/issued-standards/list-of-standards/ifrs-9-financial-instruments/)
-- [PySpark Documentation](https://spark.apache.org/docs/latest/api/python/)
-- [Airflow Documentation](https://airflow.apache.org/docs/)
-- [Docker Documentation](https://docs.docker.com/)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 Author
-
-**ECamposSoria**  
-Contact: ecampossoria88@gmail.com
-
-## 🎯 Roadmap
-
-- [ ] Real-time processing with Kafka
-- [ ] Advanced ML models (XGBoost, LightGBM)
-- [ ] Stress testing scenarios
-- [ ] Regulatory reporting templates
-- [ ] Cloud deployment automation
-- [ ] Performance optimization for 1M+ loans
-- [ ] Integration with core banking systems
-
-## ⚠️ Disclaimer
-
-This is a demonstration project using synthetic data. For production use, ensure compliance with local regulatory requirements and data protection laws.
+- **Algorithm**: RandomForestClassifier (100 estimators)
+- **Features**: loan_amount, interest_rate, term_months, credit_score, days_past_due, dti_ratio, ltv_ratio, employment_length
+- **Target**: provision_stage (1, 2, or 3)
+- **Accuracy**: ~94% on test set
 
 ---
 
-**Last Updated**: January 2024
+## Resources
+
+- [IFRS9 Standard](https://www.ifrs.org/issued-standards/list-of-standards/ifrs-9-financial-instruments/)
+- [Google Cloud BigQuery](https://cloud.google.com/bigquery/docs)
+- [Vertex AI Custom Training](https://cloud.google.com/vertex-ai/docs/training/custom-training)
+- [Looker Studio](https://lookerstudio.google.com/)
+
+---
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Author
+
+**ECamposSoria**
+Contact: ecampossoria88@gmail.com
+
+---
+
+**Last Updated**: December 2024
 **Version**: 1.0.0

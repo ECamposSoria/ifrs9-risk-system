@@ -167,7 +167,6 @@ def maybe_write_to_bigquery(
 
     job_config = bigquery.LoadJobConfig(
         write_disposition=_resolve_bigquery_write_disposition(write_disposition),
-        schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
     )
 
     logging.info("Loading %d rows to BigQuery table %s", len(df), table_ref)
